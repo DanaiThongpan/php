@@ -1,0 +1,16 @@
+ALTER TABLE borrow_back 
+  MODIFY COLUMN Date_borrow DATE NOT NULL,
+  MODIFY COLUMN Deadline_borrow DATE NOT NULL,
+  MODIFY COLUMN Date_back DATE NULL DEFAULT NULL,
+  MODIFY COLUMN timestamp_back VARCHAR(100) NULL DEFAULT NULL,
+  ADD COLUMN borrow_status ENUM('PENDING', 'BORROWED', 'RETURNED', 'OVERDUE') NOT NULL DEFAULT 'PENDING';
+
+CREATE TABLE follow_up_log (
+  logID INT AUTO_INCREMENT PRIMARY KEY,
+  IDborrow_back INT NOT NULL,
+  useraccountID VARCHAR(100) NOT NULL,
+  follow_up_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  follow_up_note TEXT NOT NULL,
+  FOREIGN KEY (IDborrow_back) REFERENCES borrow_back(IDborrow_back) ON DELETE CASCADE,
+  FOREIGN KEY (useraccountID) REFERENCES useraccount(useraccountID)
+);
