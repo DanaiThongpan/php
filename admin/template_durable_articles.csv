@@ -1,3 +1,4 @@
-﻿DA_Number,DA_ListName,classificationID,buildingID,statusID
-EQ-001,คอมพิวเตอร์ตั้งโต๊ะ,c001,b001,s0001
-EQ-002,เก้าอี้สำนักงาน,c002,b002,s0002
+DA_Number,DA_ListName,DA_Brand,classificationID,buildingID,classroomID,DA_Price
+1206-001,คอมพิวเตอร์โน้ตบุ๊ก,ASUS,,ACB,CLB3100,25000.00
+1206-002,โปรเจคเตอร์แสดงภาพ,Epson,,CLB3,CLB3000,15900.00
+1206-003,โต๊ะทำงานพร้อมลิ้นชัก,Modernform,,CLB3,CLB3100,6500.00
