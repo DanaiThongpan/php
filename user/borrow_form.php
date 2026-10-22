@@ -25,8 +25,8 @@ if (empty($da_id)) {
     exit();
 }
 
-// ดึงข้อมูลครุภัณฑ์มาแสดง
-$stmtDA = $pdo->prepare("SELECT * FROM durable_articles WHERE DA_ID = :daid AND statusID = 's0001'");
+// ดึงข้อมูลครุภัณฑ์มาแสดง (เฉพาะที่สถานะพร้อมใช้ และไม่ถูกซ่อน)
+$stmtDA = $pdo->prepare("SELECT * FROM durable_articles WHERE DA_ID = :daid AND statusID = 's0001' AND (is_visible = 1 OR is_visible IS NULL)");
 $stmtDA->execute([':daid' => $da_id]);
 $daData = $stmtDA->fetch();
 

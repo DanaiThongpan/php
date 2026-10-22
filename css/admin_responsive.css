@@ -1,0 +1,456 @@
+/**
+ * css/admin_responsive.css - สไตล์ชีตสำหรับระบบ Enterprise Responsive Dashboard
+ * รองรับ Mobile, Tablet, Desktop (100% Responsive & Zero Horizontal Overflow)
+ */
+
+/* =============================================================================
+ * 1. Global Reset & ป้องกันปัญหา Body Scroll (100vh Independent Scrolling)
+ * ============================================================================= */
+html, body {
+    width: 100%;
+    height: 100vh;
+    max-width: 100vw;
+    max-height: 100vh;
+    overflow: hidden !important; /* ห้ามให้ Body Scroll เพื่อแยก Scroll ระหว่าง Sidebar กับ Main Content */
+    background-color: #f4f6f9;
+    font-family: 'Sarabun', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+    padding: 0;
+}
+
+/* คอนเทนเนอร์หลักครอบคลุมทั้งหน้าจอแบบ Flexbox 100vh */
+#app-layout {
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+    max-height: 100vh;
+    width: 100vw;
+    max-width: 100vw;
+    overflow: hidden; /* Flexbox Container แบบไม่ใช้ position: fixed ป้องกันการทับซ้อน */
+    background-color: #1e293b; /* โทนพื้นหลัง Slate Dark สำหรับ Sidebar */
+}
+
+/* =============================================================================
+ * 2. Desktop Sidebar (คงที่ 100% ความสูงหน้าจอ พร้อมระบบ Independent Scroll ภายใน)
+ * ============================================================================= */
+@media (min-width: 992px) {
+    #sidebar {
+        width: 260px;
+        min-width: 260px;
+        max-width: 260px;
+        height: 100%; /* ความสูงคงที่ 100% ของคอนเทนเนอร์หลัก 100vh */
+        display: flex;
+        flex-direction: column;
+        background: #1e293b; /* โทน Slate Dark หรูหราทันสมัย */
+        color: #f8fafc;
+        z-index: 1030;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+        overflow: hidden; /* ปิด Scroll ทั้งตัว แล้วไปเปิดเฉพาะใน .sidebar-menu-scroll */
+        flex-shrink: 0;
+        transition: margin-left 0.3s ease-in-out;
+    }
+
+    /* เมื่อกดปุ่ม Hamburger ให้สไลด์ซ่อน Sidebar ไปทางซ้ายอย่างนุ่มนวล (Smooth Transition 0.3s) */
+    #app-layout.sidebar-collapsed #sidebar {
+        margin-left: -260px;
+    }
+}
+
+/* ในหน้าจอมือถือและแท็บเล็ต (< 992px) ให้ซ่อน Sidebar หลัก */
+@media (max-width: 991.98px) {
+    #sidebar {
+        display: none !important;
+    }
+}
+
+/* ส่วนรายการเมนูภายใน Sidebar เลื่อนได้อิสระ (Independent Scrolling) หากรายการยาวเกินจอ */
+.sidebar-menu-scroll {
+    flex-grow: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.sidebar-menu-scroll::-webkit-scrollbar {
+    width: 5px;
+}
+.sidebar-menu-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+/* การ์ดโปรไฟล์ผู้ใช้และปุ่ม Logout ปักหลักอยู่ด้านล่างสุดของ Sidebar เสมอ (ไม่เลื่อนหนีตามเมนู) */
+.sidebar-bottom-profile {
+    margin-top: auto;
+    flex-shrink: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.6);
+}
+
+/* รายละเอียดเมนูภายใน Sidebar */
+.sidebar-brand {
+    padding: 1.25rem 1.25rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #ffffff;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+}
+.sidebar-brand:hover {
+    color: #ffffff;
+}
+
+.sidebar-user-box {
+    padding: 1rem 1.25rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-nav {
+    list-style: none;
+    padding: 0.75rem 0.65rem;
+    margin: 0;
+    flex-grow: 1;
+}
+
+.sidebar-nav .nav-header {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    font-weight: 700;
+    padding: 0.75rem 0.75rem 0.35rem 0.75rem;
+}
+
+.sidebar-nav .nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.65rem 0.85rem;
+    color: #94a3b8;
+    border-radius: 8px;
+    font-size: 0.92rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    margin-bottom: 3px;
+    text-decoration: none;
+}
+
+.sidebar-nav .nav-link:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateX(3px);
+}
+
+.sidebar-nav .nav-link.active {
+    color: #ffffff;
+    background: #0d6efd;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.35);
+}
+
+.sidebar-nav .nav-link .nav-left {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar-nav .nav-link i {
+    width: 24px;
+    font-size: 1.05rem;
+    margin-right: 10px;
+    text-align: center;
+}
+
+/* =============================================================================
+ * 3. Mobile / Tablet Offcanvas Drawer (< 992px)
+ * ============================================================================= */
+.offcanvas-sidebar {
+    width: 280px !important;
+    background: #1e293b;
+    color: #f8fafc;
+}
+.offcanvas-sidebar .btn-close {
+    filter: invert(1);
+}
+
+/* =============================================================================
+ * 4. Main Content Wrapper & Independent Scrolling (เลื่อนเฉพาะเนื้อหาขวา)
+ * ============================================================================= */
+#main-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    height: 100%;
+    min-width: 0; /* ป้องกันไม่ให้ Table ดัน Container กว้างเกินหน้าจอ */
+    overflow: hidden;
+    background-color: #f4f6f9;
+    transition: all 0.3s ease-in-out;
+}
+
+/* แถบนำทางด้านบน (Top Navbar ติดอยู่ด้านบนเสมอ ไม่เลื่อนตามเนื้อหา) */
+#top-navbar {
+    flex-shrink: 0;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.75rem 1.25rem;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+    z-index: 1020;
+}
+
+/* ส่วนคอนเทนต์เนื้อหาหลักด้านขวา (ตาราง, กราฟ) เลื่อนได้อิสระด้วย overflow-y-auto */
+#main-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+    height: 100%;
+    padding: 1.5rem 1.5rem;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+#main-content::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+#main-content::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 4px;
+}
+
+@media (max-width: 767.98px) {
+    #main-content {
+        padding: 1rem 0.85rem;
+    }
+}
+
+/* ส่วนท้ายหน้าเว็บ (Footer อยู่ด้านล่างสุดของเนื้อหาเสมอ ไม่ลอย) */
+#app-footer {
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
+    padding: 1rem 1.5rem;
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-top: auto;
+    flex-shrink: 0;
+}
+
+/* =============================================================================
+ * 5. Responsive Data Tables & การจัดการตาราง
+ * ============================================================================= */
+.table-responsive {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important; /* เลื่อนลื่นไหลบน iOS และ Android */
+    border-radius: 10px;
+    margin-bottom: 1rem;
+}
+
+/* ป้องกันตาราง DataTables ดันกรอบคอนเทนเนอร์ */
+table.dataTable {
+    width: 100% !important;
+    margin: 0 auto;
+}
+
+/* สไตล์ปุ่มเครื่องหมายบวก (+) สำหรับ DataTables Responsive บนมือถือ */
+table.dataTable.dtr-inline.collapsed > tbody > tr > td.dtr-control:before,
+table.dataTable.dtr-inline.collapsed > tbody > tr > th.dtr-control:before {
+    background-color: #0d6efd !important;
+    border: 2px solid #ffffff !important;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
+    border-radius: 50% !important;
+    width: 18px !important;
+    height: 18px !important;
+    line-height: 14px !important;
+}
+
+/* =============================================================================
+ * 6. Mobile Touch-friendly Controls & Spacing
+ * ============================================================================= */
+@media (max-width: 767.98px) {
+    /* ปรับปุ่มและฟอร์มให้มีขนาดขั้นต่ำ 44px ตามมาตรฐาน Touch Target ของ Apple/Google */
+    .form-control, .form-select, .btn-action-touch {
+        min-height: 44px;
+        font-size: 0.95rem;
+    }
+    .btn-sm {
+        min-height: 36px;
+        padding: 0.35rem 0.75rem;
+    }
+    .card {
+        border-radius: 14px;
+    }
+    .filter-card {
+        padding: 1rem !important;
+    }
+}
+
+/* =============================================================================
+ * 7. Print Mode Rules (@media print) ซ่อนเมนูทั้งหมดอัตโนมัติขณะสั่งพิมพ์
+ * ============================================================================= */
+@media print {
+    #sidebar, #top-navbar, #app-footer, .no-print, .offcanvas {
+        display: none !important;
+    }
+    #app-layout, #main-wrapper, #main-content {
+        display: block !important;
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        min-height: auto !important;
+        background: white !important;
+    }
+}
+
+/* =============================================================================
+ * 8. Premium User Profile Card & Power Logout (Sidebar Fixed Bottom / mt-auto)
+ * ============================================================================= */
+.sidebar-user-card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.92) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 14px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    max-width: 100%;
+}
+
+.sidebar-user-card:hover {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.98) 100%);
+    border-color: rgba(99, 102, 241, 0.45);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35), 0 0 14px rgba(99, 102, 241, 0.18);
+    transform: translateY(-1px);
+}
+
+/* Avatar ทรงกลมพร้อมรูปภาพและกรอบเงาคมชัด */
+.avatar-circle {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 50%;
+    background: #f1f5f9;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: transform 0.25s ease, border-color 0.25s ease;
+}
+
+.avatar-circle .avatar-svg {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: block;
+}
+
+.sidebar-user-card:hover .avatar-circle {
+    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* จุดสถานะ Online สีเขียวเรืองแสง (🟢 Active Dot) */
+.user-status-dot {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 11px;
+    height: 11px;
+    background-color: #10b981;
+    border: 2px solid #1e293b;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.95);
+    display: block;
+    z-index: 2;
+}
+
+/* ชื่อผู้ใช้ตัวอักษรคมชัด พรีเมียม */
+.user-display-name {
+    font-size: 0.92rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: #ffffff;
+    line-height: 1.25;
+}
+
+/* ป้ายกำกับ Super Admin สไตล์ Micro-Pill หรูหรา สีทอง/อำพัน */
+.badge-super-admin {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #ffffff;
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    border: 1px solid rgba(245, 158, 11, 0.6);
+    border-radius: 20px;
+    box-shadow: 0 2px 6px rgba(180, 83, 9, 0.35);
+    padding: 0.18rem 0.55rem;
+    line-height: 1.2;
+    transition: all 0.2s ease;
+}
+
+.badge-super-admin:hover {
+    background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+    border-color: rgba(245, 158, 11, 0.8);
+    box-shadow: 0 3px 8px rgba(245, 158, 11, 0.45);
+}
+
+/* ป้ายกำกับ Admin ทั่วไป สไตล์ Micro-Pill สีฟ้า/น้ำเงิน */
+.badge-admin {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #ffffff;
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    border-radius: 20px;
+    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+    padding: 0.18rem 0.55rem;
+    line-height: 1.2;
+    transition: all 0.2s ease;
+}
+
+/* ปุ่ม Logout รูป Power (ปิดเครื่อง) สีแดง/ส้ม พร้อม Hover & Transition */
+.btn-sidebar-power,
+.btn-sidebar-logout {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #ff6b3d 0%, #e63946 100%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 12px rgba(230, 57, 70, 0.4);
+    color: #ffffff;
+    font-size: 0.95rem;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-sidebar-power:hover,
+.btn-sidebar-logout:hover {
+    background: linear-gradient(135deg, #ff8255 0%, #dc2626 100%);
+    color: #ffffff;
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 6px 18px rgba(230, 57, 70, 0.55), 0 0 10px rgba(255, 107, 61, 0.4);
+}
+
+.btn-sidebar-power:active,
+.btn-sidebar-logout:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 2px 8px rgba(230, 57, 70, 0.4);
+}
+

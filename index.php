@@ -1,15 +1,39 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // ดึงไฟล์เชื่อมต่อฐานข้อมูล PDO แบบ Dev จากโฟลเดอร์หลัก
 require_once 'control/connectPDO_dev.php';
 
 $errorMsg = '';
 
+// บันทึก URL สำหรับ Redirect ถ้ามีส่งมาทาง GET หรือ Session (สำหรับระบบสแกน QR Code)
+if (!empty($_GET['redirect'])) {
+    $_SESSION['redirect_url'] = $_GET['redirect'];
+}
+
+// เช็คว่าหากผู้ใช้ล็อกอินอยู่แล้ว (Already Logged In)
+if (isset($_SESSION['Selogin']) && $_SESSION['Selogin'] == 1) {
+    if (!empty($_SESSION['redirect_url'])) {
+        $target = $_SESSION['redirect_url'];
+        unset($_SESSION['redirect_url']);
+        header("Location: " . $target);
+        exit();
+    }
+    if (($_SESSION['useraccountType'] ?? '') === 'UT00000001') {
+        header("Location: admin/main.php");
+    } else {
+        header("Location: user/main.php");
+    }
+    exit();
+}
+
 // เช็คว่ามีการส่งฟอร์มเข้าสู่ระบบมาหรือไม่
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
-    $username = $_POST['username'] ?? '';
+    $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
+    $redirectParam = trim($_POST['redirect'] ?? ($_SESSION['redirect_url'] ?? ''));
 
     if (empty($username) || empty($password)) {
         $errorMsg = "กรุณากรอกชื่อผู้ใช้งานและรหัสผ่านให้ครบถ้วน";
@@ -32,20 +56,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                     $_SESSION['Sename'] = $user['useraccountName'];
                     $_SESSION['useraccountType'] = $user['useraccountType']; // เก็บระดับสิทธิ์สำหรับระบบใหม่
                     $_SESSION['SeType'] = $user['useraccountType']; // เก็บระดับสิทธิ์สำหรับระบบเก่า (Backward Compatibility)
+                    $_SESSION['userDepartment'] = $user['userDepartment'] ?? ''; // แผนกสังกัดของผู้ใช้ (สำหรับแบ่งสิทธิ์การจัดการ)
+
+                    // ตรวจสอบว่ามีการส่งต่อไปยังหน้ายืมหรือหน้าที่สแกนจาก QR Code หรือไม่
+                    if (!empty($redirectParam)) {
+                        unset($_SESSION['redirect_url']);
+                        header("Location: " . $redirectParam);
+                        exit();
+                    }
 
                     // ตรวจสอบระดับผู้ใช้งาน (รหัส UT00000001 = Admin, นอกนั้นถือเป็น User)
                     if ($user['useraccountType'] === 'UT00000001') {
                         header("Location: admin/main.php");
                         exit();
                     } else {
-                        // ตรวจสอบว่ามีการเข้าจาก QR Code แล้วยังไม่ได้ล็อกอินหรือไม่
-                        if (isset($_SESSION['redirect_url']) && !empty($_SESSION['redirect_url'])) {
-                            $targetUrl = $_SESSION['redirect_url'];
-                            unset($_SESSION['redirect_url']); // ล้างค่าทิ้งหลังจากใช้เสร็จ
-                            header("Location: " . $targetUrl);
-                        } else {
-                            header("Location: user/main.php");
-                        }
+                        header("Location: user/main.php");
                         exit();
                     }
                 } else {
@@ -109,6 +134,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         </div>
         <div class="card-body p-4">
             
+            <?php 
+            $currentRedirect = $_GET['redirect'] ?? $_SESSION['redirect_url'] ?? '';
+            if (!empty($currentRedirect)): 
+            ?>
+                <div class="alert alert-info alert-dismissible fade show rounded-3 small py-2" role="alert">
+                    <i class="fa-solid fa-qrcode me-1 text-primary"></i> 
+                    ท่านเข้าสู่ระบบเพื่อดำเนินการต่อตามคำขอ (QR Code) ระบบจะนำทางกลับไปยังรายการครุภัณฑ์อัตโนมัติ
+                </div>
+            <?php endif; ?>
+
             <?php if (!empty($errorMsg)): ?>
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
                     <i class="fa-solid fa-circle-exclamation me-1"></i> <?php echo htmlspecialchars($errorMsg); ?>
@@ -117,6 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             <?php endif; ?>
 
             <form action="" method="POST">
+                <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($currentRedirect); ?>">
                 <div class="mb-3">
                     <label class="form-label text-secondary fw-bold">ชื่อผู้ใช้งาน (Username)</label>
                     <div class="input-group">

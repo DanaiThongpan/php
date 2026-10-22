@@ -1,0 +1,391 @@
+/**
+ * admin_dashboard.css
+ * Enterprise UI/UX Design System & Performance Styling
+ * รองรับ CSS Variables (:root), Glassmorphism, Skeleton Loading, และ Micro-interactions
+ */
+
+:root {
+    /* -------------------------------------------------------------------------
+     * 1. ธีมสีหลักและเกรเดียนท์ระดับ Enterprise (Brand & Semantic Palettes)
+     * ------------------------------------------------------------------------- */
+    /* น้ำเงิน - ครุภัณฑ์ทั้งหมด (Total Assets) */
+    --dash-blue-start: #1e3c72;
+    --dash-blue-end: #2a5298;
+    --dash-blue-glow: rgba(30, 60, 114, 0.35);
+    --dash-grad-blue: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+
+    /* เหลือง/อำพัน - กำลังถูกยืม (Borrowed Assets) */
+    --dash-amber-start: #d97706;
+    --dash-amber-end: #f59e0b;
+    --dash-amber-glow: rgba(217, 119, 6, 0.35);
+    --dash-grad-amber: linear-gradient(135deg, #b45309 0%, #f59e0b 100%);
+
+    /* แดง/โรส - เลยกำหนดส่งคืน (Overdue) */
+    --dash-red-start: #b91c1c;
+    --dash-red-end: #ef4444;
+    --dash-red-glow: rgba(185, 28, 28, 0.35);
+    --dash-grad-red: linear-gradient(135deg, #991b1b 0%, #ef4444 100%);
+
+    /* เขียว/เอเมอรัลด์ - คำขอรออนุมัติ (Pending Requests) */
+    --dash-green-start: #047857;
+    --dash-green-end: #10b981;
+    --dash-green-glow: rgba(4, 120, 87, 0.35);
+    --dash-grad-green: linear-gradient(135deg, #065f46 0%, #10b981 100%);
+
+    /* ม่วง/เพอร์เพิล - Accent พิเศษ */
+    --dash-purple-start: #6d28d9;
+    --dash-purple-end: #8b5cf6;
+    --dash-grad-purple: linear-gradient(135deg, #5b21b6 0%, #8b5cf6 100%);
+
+    /* -------------------------------------------------------------------------
+     * 2. พื้นหลัง, พื้นผิว และระบบกระจกฝ้า (Surfaces & Glassmorphism)
+     * ------------------------------------------------------------------------- */
+    --dash-bg: #f8fafc;
+    --dash-card-bg: #ffffff;
+    --dash-glass-bg: rgba(255, 255, 255, 0.82);
+    --dash-glass-border: rgba(255, 255, 255, 0.65);
+    --dash-border-subtle: #e2e8f0;
+
+    /* -------------------------------------------------------------------------
+     * 3. ระบบเงา Soft Drop Shadows (Diffuse Layering)
+     * ------------------------------------------------------------------------- */
+    --dash-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --dash-shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --dash-shadow-md: 0 6px 16px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+    --dash-shadow-lg: 0 12px 24px -4px rgba(15, 23, 42, 0.1), 0 4px 10px -2px rgba(15, 23, 42, 0.05);
+    --dash-shadow-hover: 0 18px 30px -6px rgba(15, 23, 42, 0.15), 0 8px 14px -3px rgba(15, 23, 42, 0.08);
+
+    /* -------------------------------------------------------------------------
+     * 4. เส้นโค้งมนและระยะเวลา Animation (Radii & Transitions)
+     * ------------------------------------------------------------------------- */
+    --dash-radius-sm: 8px;
+    --dash-radius-md: 12px;
+    --dash-radius-lg: 16px;
+    --dash-radius-xl: 20px;
+    --dash-radius-pill: 9999px;
+    --dash-transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* =============================================================================
+ * โครงสร้างพื้นผิว Glassmorphism & Panel Cards
+ * ============================================================================= */
+.glass-panel {
+    background: var(--dash-glass-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--dash-glass-border);
+    border-radius: var(--dash-radius-lg);
+    box-shadow: var(--dash-shadow-sm);
+    transition: var(--dash-transition);
+}
+
+.dashboard-card {
+    background-color: var(--dash-card-bg);
+    border: 1px solid var(--dash-border-subtle);
+    border-radius: var(--dash-radius-lg);
+    box-shadow: var(--dash-shadow-sm);
+    transition: var(--dash-transition);
+    overflow: hidden;
+}
+
+.dashboard-card:hover {
+    box-shadow: var(--dash-shadow-md);
+}
+
+/* =============================================================================
+ * การ์ดสรุปข้อมูลสถิติ 4 ใบระดับพรีเมียม (Premium Stat Cards)
+ * ============================================================================= */
+.stat-card-enterprise {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 155px;
+    padding: 1.5rem 1.4rem;
+    border-radius: var(--dash-radius-lg);
+    color: #ffffff;
+    text-decoration: none;
+    overflow: hidden;
+    isolation: isolate;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: var(--dash-shadow-md);
+    transition: var(--dash-transition);
+}
+
+/* เอฟเฟกต์สะท้อนแสงกระจกมุมบนขวา */
+.stat-card-enterprise::before {
+    content: '';
+    position: absolute;
+    top: -40%;
+    right: -20%;
+    width: 220px;
+    height: 220px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0) 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    transition: transform 0.5s ease;
+}
+
+/* Hover Micro-interaction: ลอยขึ้น + ปรับความสว่างและเงา Glow */
+.stat-card-enterprise:hover {
+    transform: translateY(-6px) scale(1.01);
+    color: #ffffff;
+}
+
+.stat-card-enterprise:hover::before {
+    transform: scale(1.2);
+}
+
+.stat-card-blue {
+    background: var(--dash-grad-blue);
+}
+.stat-card-blue:hover {
+    box-shadow: 0 16px 30px -4px var(--dash-blue-glow);
+}
+
+.stat-card-amber {
+    background: var(--dash-grad-amber);
+}
+.stat-card-amber:hover {
+    box-shadow: 0 16px 30px -4px var(--dash-amber-glow);
+}
+
+.stat-card-red {
+    background: var(--dash-grad-red);
+}
+.stat-card-red:hover {
+    box-shadow: 0 16px 30px -4px var(--dash-red-glow);
+}
+
+.stat-card-green {
+    background: var(--dash-grad-green);
+}
+.stat-card-green:hover {
+    box-shadow: 0 16px 30px -4px var(--dash-green-glow);
+}
+
+/* ไอคอนลายน้ำขนาดใหญ่ด้านหลัง (Watermark Icon) */
+.stat-card-enterprise .watermark-icon {
+    position: absolute;
+    right: 1.15rem;
+    bottom: 0.9rem;
+    font-size: 3.5rem;
+    opacity: 0.18;
+    z-index: 0;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+}
+
+.stat-card-enterprise:hover .watermark-icon {
+    transform: scale(1.15) rotate(6deg);
+    opacity: 0.3;
+}
+
+/* ตัวเลขสถิติขนาดใหญ่ (Stat Metric Value) */
+.stat-card-enterprise .stat-number {
+    font-size: 2.25rem;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0.35rem 0;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card-enterprise .stat-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.88;
+}
+
+.stat-card-enterprise .stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.3rem 0.75rem;
+    border-radius: var(--dash-radius-pill);
+    background: rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(4px);
+    width: fit-content;
+    margin-top: 0.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    transition: background 0.2s ease;
+}
+
+.stat-card-enterprise:hover .stat-badge {
+    background: rgba(255, 255, 255, 0.32);
+}
+
+/* =============================================================================
+ * SKELETON LOADING ANIMATION (Shimmer Wave Effect)
+ * เทคนิคการทำ Skeleton Loader:
+ * ใช้ background-size: 200% และ keyframes เลื่อน background-position
+ * ทำให้เกิดแสง Shimmer วิ่งผ่านพื้นสีเทาอย่างนุ่มนวล
+ * ============================================================================= */
+@keyframes skeletonShimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.skeleton-shimmer {
+    background: linear-gradient(
+        90deg,
+        rgba(226, 232, 240, 0.7) 25%,
+        rgba(241, 245, 249, 0.95) 50%,
+        rgba(226, 232, 240, 0.7) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.6s infinite ease-in-out;
+    border-radius: 6px;
+    display: inline-block;
+}
+
+/* Skeleton สำหรับการ์ดสีเข้ม (บนพื้นสี Gradient) */
+.skeleton-shimmer-card {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.15) 25%,
+        rgba(255, 255, 255, 0.35) 50%,
+        rgba(255, 255, 255, 0.15) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.6s infinite ease-in-out;
+    border-radius: 6px;
+}
+
+.skeleton-text-lg {
+    height: 38px;
+    width: 65%;
+    margin: 6px 0;
+}
+
+.skeleton-text-sm {
+    height: 16px;
+    width: 45%;
+}
+
+.skeleton-chart-box {
+    width: 100%;
+    height: 270px;
+    border-radius: var(--dash-radius-md);
+}
+
+/* คลาสควบคุมการสลับแสดงผลระหว่าง Skeleton กับ Real Data */
+.is-loading .content-real {
+    display: none !important;
+}
+
+.is-loading .content-skeleton {
+    display: block !important;
+}
+
+.is-ready .content-real {
+    display: block !important;
+    animation: fadeInContent 0.35s ease-out;
+}
+
+.is-ready .content-skeleton {
+    display: none !important;
+}
+
+@keyframes fadeInContent {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* =============================================================================
+ * Quick Actions เมนูลัดการจัดการด่วน
+ * ============================================================================= */
+.quick-action-item {
+    border-radius: var(--dash-radius-md);
+    padding: 0.85rem 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: var(--dash-transition);
+    text-decoration: none;
+    border: 1px solid var(--dash-border-subtle);
+    background-color: #ffffff;
+    color: #334155;
+    margin-bottom: 0.75rem;
+}
+
+.quick-action-item:hover {
+    background-color: #f8fafc;
+    border-color: #3b82f6;
+    color: #1d4ed8;
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+}
+
+.quick-action-icon-box {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--dash-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    margin-right: 0.85rem;
+    flex-shrink: 0;
+}
+
+/* =============================================================================
+ * ตารางความเคลื่อนไหวล่าสุด (Recent Activity Table)
+ * ============================================================================= */
+.table-activity {
+    margin-bottom: 0;
+}
+
+.table-activity th {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    background-color: #f8fafc;
+    border-bottom: 1px solid var(--dash-border-subtle);
+    padding: 0.85rem 1rem;
+}
+
+.table-activity td {
+    padding: 0.9rem 1rem;
+    vertical-align: middle;
+    font-size: 0.9rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.table-activity tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+/* =============================================================================
+ * กล่องแจ้งเตือน Error State (ระบบจัดการข้อผิดพลาด)
+ * ============================================================================= */
+.dash-error-state {
+    display: none;
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    background: #fff;
+    border: 1px solid #fecaca;
+    border-radius: var(--dash-radius-lg);
+    box-shadow: var(--dash-shadow-sm);
+}
+
+.dash-error-state.show {
+    display: block;
+    animation: fadeInContent 0.3s ease;
+}

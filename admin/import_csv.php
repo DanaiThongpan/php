@@ -1,65 +1,20 @@
 <?php
-session_start();
-// ตรวจสอบสิทธิ์ (ต้องเป็น Admin)
-if (!isset($_SESSION['Selogin']) || $_SESSION['Selogin'] != 1 || $_SESSION['useraccountType'] !== 'UT00000001') {
-    header("Location: ../index.php");
-    exit();
-}
-$useraccountName = $_SESSION['Sename'];
+$pageTitle = "นำเข้าข้อมูลครุภัณฑ์ด้วย CSV (CSV Import)";
+require_once __DIR__ . '/../component/admin_header.php';
+require_once __DIR__ . '/../component/admin_sidebar.php';
+require_once __DIR__ . '/../component/admin_navbar.php';
 ?>
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>นำเข้าข้อมูลครุภัณฑ์ด้วย CSV | Asset Management</title>
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome 6 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Custom Style เล็กน้อยให้ UI ดูพรีเมียมขึ้น -->
-    <style>
-        body { background-color: #f4f6f9; }
-        .card { border-radius: 12px; }
-        .card-header { border-top-left-radius: 12px !important; border-top-right-radius: 12px !important; }
-        .alert-custom { border-left: 5px solid #0dcaf0; }
-        .table-preview th { font-size: 0.85rem; font-weight: 600; vertical-align: middle; }
-        .table-preview td { font-size: 0.85rem; vertical-align: middle; color: #555; }
-    </style>
-</head>
-<body>
-
-<!-- Navbar -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
-    <div class="container">
-        <a class="navbar-brand fw-bold" href="main.php"><i class="fa-solid fa-screwdriver-wrench text-warning me-2"></i>Admin Panel</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="main.php"><i class="fa-solid fa-house"></i> หน้าแรก</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="manage_data.php"><i class="fa-solid fa-database"></i> จัดการข้อมูล</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link active fw-bold" href="import_csv.php"><i class="fa-solid fa-file-csv text-info"></i> นำเข้าข้อมูล (CSV)</a>
-                </li>
-            </ul>
-            <div class="ms-auto text-light d-flex align-items-center">
-                <span class="me-3"><i class="fa-solid fa-circle-user text-success me-1"></i> <?php echo htmlspecialchars($useraccountName); ?></span>
-                <a href="../logout.php" class="btn btn-outline-danger btn-sm rounded-pill px-3"><i class="fa-solid fa-right-from-bracket"></i> ออกจากระบบ</a>
-            </div>
-        </div>
-    </div>
-</nav>
+<style>
+    .card { border-radius: 14px; }
+    .alert-custom { border-left: 5px solid #0dcaf0; }
+    .table-preview th { font-size: 0.85rem; font-weight: 600; vertical-align: middle; }
+    .table-preview td { font-size: 0.85rem; vertical-align: middle; color: #555; }
+</style>
 
 <!-- Main Content -->
-<div class="container mt-5 mb-5">
+<div class="container-fluid px-0">
     <div class="row justify-content-center">
-        <div class="col-lg-10">
+        <div class="col-lg-11 col-xl-10">
             <div class="card shadow border-0">
                 <div class="card-header bg-primary text-white py-3">
                     <h5 class="mb-0 fw-bold"><i class="fa-solid fa-cloud-arrow-up me-2"></i> ระบบนำเข้าข้อมูลครุภัณฑ์ (CSV Import)</h5>
@@ -68,7 +23,7 @@ $useraccountName = $_SESSION['Sename'];
                     
                     <!-- กล่องคำแนะนำและตัวอย่างข้อมูล -->
                     <div class="alert alert-light shadow-sm alert-custom mb-4" role="alert">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                             <h6 class="alert-heading fw-bold text-dark mb-0">
                                 <i class="fa-solid fa-circle-info text-info me-2"></i> คำแนะนำและรูปแบบข้อมูล
                             </h6>
@@ -83,39 +38,36 @@ $useraccountName = $_SESSION['Sename'];
                             <table class="table table-hover table-striped table-preview text-center bg-white mb-0">
                                 <thead class="table-light text-primary">
                                     <tr>
-                                        <th>DA_Number<br><span class="text-muted fw-normal">(รหัสครุภัณฑ์)</span></th>
-                                        <th>DA_ListName<br><span class="text-muted fw-normal">(ชื่อรายการ)</span></th>
-                                        <th>DA_Brand<br><span class="text-muted fw-normal">(ยี่ห้อ)</span></th>
-                                        <th>classificationID<br><span class="badge bg-success-subtle text-success fw-normal">เว้นว่างได้ (ตรวจจับอัตโนมัติ)</span></th>
-                                        <th>buildingID<br><span class="text-muted fw-normal">(รหัสอาคาร)</span></th>
-                                        <th>classroomID<br><span class="text-muted fw-normal">(รหัสห้อง)</span></th>
-                                        <th>DA_Price<br><span class="text-muted fw-normal">(ราคา)</span></th>
+                                        <th>DA_Number<br><span class="text-secondary small fw-normal">(รหัสครุภัณฑ์)</span><br><span class="badge bg-danger-subtle text-danger fw-normal">จำเป็นต้องระบุ</span></th>
+                                        <th>DA_ListName<br><span class="text-secondary small fw-normal">(ชื่อรายการ)</span><br><span class="badge bg-danger-subtle text-danger fw-normal">จำเป็นต้องระบุ</span></th>
+                                        <th>DA_Brand<br><span class="text-secondary small fw-normal">(ยี่ห้อ)</span><br><span class="badge bg-secondary-subtle text-secondary fw-normal">เว้นว่างได้</span></th>
+                                        <th>classificationID<br><span class="text-secondary small fw-normal">(รหัสหมวดหมู่)</span><br><span class="badge bg-success-subtle text-success fw-normal">เว้นว่างได้ (ตรวจจับอัตโนมัติ)</span></th>
+                                        <th>buildingID<br><span class="text-secondary small fw-normal">(รหัสอาคาร)</span><br><span class="badge bg-secondary-subtle text-secondary fw-normal">เว้นว่างได้</span></th>
+                                        <th>classroomID<br><span class="text-secondary small fw-normal">(รหัสห้อง)</span><br><span class="badge bg-secondary-subtle text-secondary fw-normal">เว้นว่างได้</span></th>
+                                        <th>DA_Price<br><span class="text-secondary small fw-normal">(ราคา)</span><br><span class="badge bg-secondary-subtle text-secondary fw-normal">เว้นว่างได้</span></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
                                         <td class="font-monospace text-primary">1206-001</td>
-                                        <td>คอมพิวเตอร์โน้ตบุ๊ก</td>
-                                        <td>ASUS</td>
-                                        <td>c0000000001</td>
-                                        <td>ACB</td>
-                                        <td>CLB3100</td>
-                                        <td class="text-end">25,000.00</td>
+                                        <td>เครื่องปรับอากาศ</td>
+                                        <td>Daikin</td>
+                                        <td><span class="badge bg-light text-dark border">1</span></td>
+                                        <td><span class="badge bg-light text-dark border">อาคาร 1</span></td>
+                                        <td><span class="badge bg-light text-dark border">ห้อง 101</span></td>
+                                        <td>25000.00</td>
                                     </tr>
                                     <tr>
                                         <td class="font-monospace text-primary">1206-002</td>
-                                        <td>โปรเจคเตอร์แสดงภาพ</td>
-                                        <td>Epson</td>
-                                        <td>c0000000002</td>
-                                        <td>CLB3</td>
-                                        <td>CLB3000</td>
-                                        <td class="text-end">15,900.00</td>
+                                        <td>เครื่องคอมพิวเตอร์</td>
+                                        <td>Dell</td>
+                                        <td><span class="badge bg-light text-dark border">1</span></td>
+                                        <td><span class="badge bg-light text-dark border">อาคาร 2</span></td>
+                                        <td><span class="badge bg-light text-dark border">ห้อง 204</span></td>
+                                        <td>32000.00</td>
                                     </tr>
                                 </tbody>
                             </table>
-                        </div>
-                        <div class="form-text mt-2 text-danger fw-bold small">
-                            <i class="fa-solid fa-triangle-exclamation"></i> ข้อควรระวัง: แถวแรกของไฟล์ CSV จะต้องเป็นชื่อคอลัมน์เสมอ (ห้ามเว้นว่าง หรือสลับตำแหน่ง)
                         </div>
                     </div>
 
@@ -144,7 +96,4 @@ $useraccountName = $_SESSION['Sename'];
     </div>
 </div>
 
-<!-- Bootstrap JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+<?php require_once __DIR__ . '/../component/admin_footer.php'; ?>

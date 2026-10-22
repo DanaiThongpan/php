@@ -10,33 +10,56 @@ if (!isset($_SESSION['Selogin']) || $_SESSION['Selogin'] != 1 || $_SESSION['user
 }
 
 // 2. โหลดไฟล์เชื่อมต่อฐานข้อมูล PDO แบบ Dev ย้อนกลับไปโฟลเดอร์หลัก
-require_once '../control/connectPDO_dev.php';
+require_once __DIR__ . '/../control/connectPDO_dev.php';
 
-// ป้องกัน Error ด้วยการใช้ isset() เช็คก่อนดึงค่าจาก Session
 $useraccountName = isset($_SESSION['Sename']) ? $_SESSION['Sename'] : 'ไม่ทราบชื่อ';
 $useraccountID   = isset($_SESSION['SeUser']) ? $_SESSION['SeUser'] : '';
+$userDepartment  = isset($_SESSION['userDepartment']) ? $_SESSION['userDepartment'] : '';
+
+// หากใน Session ยังไม่มีแผนก ให้ query สดจากฐานข้อมูล
+if (empty($userDepartment) && !empty($useraccountID)) {
+    try {
+        $stmtDept = $pdo->prepare("SELECT userDepartment FROM useraccount WHERE useraccountID = :uid");
+        $stmtDept->execute([':uid' => $useraccountID]);
+        $userDepartment = $stmtDept->fetchColumn() ?: 'ไม่ระบุแผนก';
+        $_SESSION['userDepartment'] = $userDepartment;
+    } catch (PDOException $e) {
+        $userDepartment = 'ไม่ระบุแผนก';
+    }
+}
 
 // 3. ดึงข้อมูลสถิติของ User ส่วนตัวโดยใช้ PDO Prepared Statements
 $borrowCount = 0;
 $overdueCount = 0;
+$totalHistoryCount = 0;
+$myRequestCount = 0;
 $todayDate = date('Y-m-d'); // ดึงวันที่ปัจจุบันผ่าน PHP แทนเพื่อความเข้ากันได้กับทั้ง MySQL และ SQLite
 
 try {
-    // จำนวนครุภัณฑ์ที่กำลังยืม (ที่ยังไม่คืน)
+    // 1. จำนวนครุภัณฑ์ที่กำลังยืม (ที่ยังไม่คืน)
     $stmt = $pdo->prepare("SELECT COUNT(*) AS total FROM borrow_back WHERE useraccountID_borrow = :uid AND (Date_back IS NULL OR Date_back = '')");
     $stmt->execute([':uid' => $useraccountID]);
     $borrowCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
-    // จำนวนครุภัณฑ์ที่เลยกำหนดคืน (Overdue)
+    // 2. จำนวนครุภัณฑ์ที่เลยกำหนดคืน (Overdue)
     $stmt = $pdo->prepare("SELECT COUNT(*) AS total FROM borrow_back WHERE useraccountID_borrow = :uid AND (Date_back IS NULL OR Date_back = '') AND Deadline_borrow < :today");
     $stmt->execute([
         ':uid' => $useraccountID,
         ':today' => $todayDate
     ]);
     $overdueCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+    // 3. จำนวนประวัติการยืม-คืนทั้งหมดของผู้ใช้คนนี้
+    $stmtHist = $pdo->prepare("SELECT COUNT(*) AS total FROM borrow_back WHERE useraccountID_borrow = :uid");
+    $stmtHist->execute([':uid' => $useraccountID]);
+    $totalHistoryCount = $stmtHist->fetch(PDO::FETCH_ASSOC)['total'];
+
+    // 4. จำนวนคำขอเสนอขึ้นทะเบียนครุภัณฑ์ที่ตนเองยื่นไว้
+    $stmtReq = $pdo->prepare("SELECT COUNT(*) AS total FROM durable_articles WHERE created_by = :uid");
+    $stmtReq->execute([':uid' => $useraccountID]);
+    $myRequestCount = $stmtReq->fetch(PDO::FETCH_ASSOC)['total'];
     
 } catch (PDOException $e) {
-    // ในโปรดักชันควรเก็บ log ไว้ ไม่ควรแสดง error ตรงๆ
     $errorMsg = $e->getMessage();
 }
 ?>
@@ -52,72 +75,273 @@ try {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- DataTables Bootstrap 5 CSS -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" />
+    <!-- DataTables Responsive CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.4.1/css/responsive.bootstrap5.min.css" />
     
     <style>
-        body { background-color: #f8f9fc; }
+        html, body {
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100vw;
+            background-color: #f8f9fc;
+            font-family: 'Sarabun', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
         .widget-card {
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             color: white;
-            transition: transform 0.3s ease;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+            text-decoration: none;
+            display: block;
         }
-        .widget-card:hover { transform: translateY(-5px); }
-        .widget-icon { font-size: 3rem; opacity: 0.5; }
+        .widget-card:hover { 
+            transform: translateY(-4px); 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.12) !important;
+            color: white;
+        }
+        .widget-icon { font-size: 2.8rem; opacity: 0.55; }
         
         .bg-primary-grad { background: linear-gradient(45deg, #4e73df, #224abe); }
-        .bg-danger-grad { background: linear-gradient(45deg, #e74a3b, #be2617); }
+        .bg-danger-grad  { background: linear-gradient(45deg, #e74a3b, #be2617); }
+        .bg-success-grad { background: linear-gradient(45deg, #1cc88a, #13855c); }
+        .bg-purple-grad  { background: linear-gradient(45deg, #6f42c1, #4e229e); }
+        
+        .quick-nav-card {
+            border: 1px solid #e3e6f0;
+            border-radius: 12px;
+            background: #fff;
+            padding: 1rem;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            color: #4e73df;
+            display: flex;
+            align-items: center;
+        }
+        .quick-nav-card:hover {
+            border-color: #4e73df;
+            background-color: #f8faff;
+            transform: translateY(-2px);
+            color: #224abe;
+        }
     </style>
 </head>
 <body>
 
-<!-- แถบนำทาง (Navbar จำลองสำหรับ User) -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+<!-- แถบนำทาง (Navbar เมนูเต็มรูปแบบสำหรับ User) -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm sticky-top">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="#"><i class="fa-solid fa-user-astronaut me-2"></i>User Panel</a>
-        <div class="ms-auto text-light d-flex align-items-center">
-            <span class="me-3"><i class="fa-solid fa-user me-1"></i> ผู้ใช้งาน: <?php echo htmlspecialchars($useraccountName); ?></span>
-            <!-- ลิงก์ออกจากระบบ ให้วิ่งไปหาไฟล์ logout.php ที่โฟลเดอร์หลัก -->
-            <a href="../logout.php" class="btn btn-outline-light btn-sm"><i class="fa-solid fa-right-from-bracket"></i> ออกจากระบบ</a>
+        <a class="navbar-brand fw-bold" href="main.php">
+            <i class="fa-solid fa-user-astronaut me-2"></i>User Panel
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#userNavbar">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="userNavbar">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link active fw-bold" href="main.php">
+                        <i class="fa-solid fa-house me-1"></i> หน้าแรก
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#available-section">
+                        <i class="fa-solid fa-box-open me-1"></i> ยืมครุภัณฑ์
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link text-info fw-semibold" href="../borrow_request.php">
+                        <i class="fa-solid fa-qrcode me-1"></i> สแกน QR ยืมครุภัณฑ์
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#borrowed-section">
+                        <i class="fa-solid fa-hand-holding-hand me-1"></i> รายการกำลังยืม 
+                        <?php if ($borrowCount > 0): ?>
+                            <span class="badge bg-warning text-dark rounded-pill"><?php echo $borrowCount; ?></span>
+                        <?php endif; ?>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="history.php">
+                        <i class="fa-solid fa-clock-rotate-left me-1"></i> ประวัติการยืม-คืน
+                    </a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="fa-solid fa-boxes-packing me-1"></i> ขึ้นทะเบียนครุภัณฑ์
+                    </a>
+                    <ul class="dropdown-menu shadow-sm border-0">
+                        <li>
+                            <a class="dropdown-item" href="request_item.php">
+                                <i class="fa-solid fa-file-circle-plus text-primary me-2"></i> เสนอขอขึ้นทะเบียนใหม่
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="request_item.php?tab=csv">
+                                <i class="fa-solid fa-file-csv text-success me-2"></i> นำเข้าคำขอผ่าน CSV
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="request_item.php#requestsHistoryTable">
+                                <i class="fa-solid fa-clipboard-list text-warning me-2"></i> ติดตามคำขอของฉัน
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+            <div class="ms-auto text-light d-flex align-items-center flex-wrap gap-2">
+                <span class="me-2 small">
+                    <i class="fa-solid fa-circle-user text-warning me-1"></i> 
+                    ผู้ใช้งาน: <strong><?php echo htmlspecialchars($useraccountName); ?></strong> 
+                    (<?php echo htmlspecialchars($userDepartment); ?>)
+                </span>
+                <a href="../logout.php" class="btn btn-outline-light btn-sm rounded-pill px-3">
+                    <i class="fa-solid fa-right-from-bracket"></i> ออกจากระบบ
+                </a>
+            </div>
         </div>
     </div>
 </nav>
 
 <div class="container mt-4 mb-5">
-    <h4 class="mb-4 text-secondary fw-bold"><i class="fa-solid fa-id-card me-2"></i>ภาพรวมผู้ใช้งาน (User Dashboard)</h4>
     
-    <!-- Widget ส่วนบนแสดงผลสถิติส่วนตัว -->
-    <div class="row g-4 mb-5">
-        <div class="col-md-6">
-            <div class="card widget-card bg-primary-grad shadow-sm h-100 p-4">
-                <div class="card-body d-flex justify-content-between align-items-center">
+    <!-- ส่วนหัวหน้าจอ -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h4 class="text-secondary fw-bold mb-1"><i class="fa-solid fa-id-card text-primary me-2"></i>ภาพรวมผู้ใช้งาน (User Dashboard)</h4>
+            <p class="text-muted small mb-0">ยินดีต้อนรับสู่ระบบจัดการครุภัณฑ์ แผนกสังกัด: <strong><?php echo htmlspecialchars($userDepartment); ?></strong></p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="history.php" class="btn btn-outline-secondary rounded-pill px-3 shadow-sm">
+                <i class="fa-solid fa-clock-rotate-left me-1"></i> ประวัติการยืม-คืน
+            </a>
+            <a href="request_item.php" class="btn btn-primary rounded-pill px-3 shadow-sm">
+                <i class="fa-solid fa-file-circle-plus me-1"></i> เสนอขอขึ้นทะเบียนครุภัณฑ์
+            </a>
+        </div>
+    </div>
+
+    <!-- เมนูลัดเข้าถึงหน้าต่างๆ (Quick Action Shortcuts) -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-4 col-lg">
+            <a href="../borrow_request.php" class="quick-nav-card shadow-sm h-100 border border-primary-subtle">
+                <div class="p-2 bg-primary-subtle rounded-3 text-primary me-3"><i class="fa-solid fa-qrcode fa-lg"></i></div>
+                <div>
+                    <div class="fw-bold text-primary small">สแกน QR Code</div>
+                    <div class="text-muted" style="font-size: 0.78rem;">ยืม/คืน ด้วยรหัสครุภัณฑ์</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg">
+            <a href="#available-section" class="quick-nav-card shadow-sm h-100">
+                <div class="p-2 bg-primary-subtle rounded-3 text-primary me-3"><i class="fa-solid fa-box-open fa-lg"></i></div>
+                <div>
+                    <div class="fw-bold text-dark small">ยืมครุภัณฑ์</div>
+                    <div class="text-muted" style="font-size: 0.78rem;">เลือกรายการพร้อมยืม</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg">
+            <a href="#borrowed-section" class="quick-nav-card shadow-sm h-100">
+                <div class="p-2 bg-warning-subtle rounded-3 text-warning me-3"><i class="fa-solid fa-hand-holding-hand fa-lg"></i></div>
+                <div>
+                    <div class="fw-bold text-dark small">รายการกำลังยืม</div>
+                    <div class="text-muted" style="font-size: 0.78rem;">รอคืน <?php echo $borrowCount; ?> ชิ้น</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-4 col-lg">
+            <a href="history.php" class="quick-nav-card shadow-sm h-100">
+                <div class="p-2 bg-info-subtle rounded-3 text-info me-3"><i class="fa-solid fa-clock-rotate-left fa-lg"></i></div>
+                <div>
+                    <div class="fw-bold text-dark small">ประวัติยืม-คืน</div>
+                    <div class="text-muted" style="font-size: 0.78rem;">ทั้งหมด <?php echo $totalHistoryCount; ?> ครั้ง</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-6 col-lg">
+            <a href="request_item.php" class="quick-nav-card shadow-sm h-100">
+                <div class="p-2 bg-success-subtle rounded-3 text-success me-3"><i class="fa-solid fa-file-circle-plus fa-lg"></i></div>
+                <div>
+                    <div class="fw-bold text-dark small">เสนอขึ้นทะเบียน</div>
+                    <div class="text-muted" style="font-size: 0.78rem;">กรอกเดี่ยว / CSV</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-12 col-md-6 col-lg">
+            <a href="request_item.php#myRequestsTable" class="quick-nav-card shadow-sm h-100">
+                <div class="p-2 bg-purple-subtle rounded-3 text-purple me-3"><i class="fa-solid fa-clipboard-check fa-lg"></i></div>
+                <div>
+                    <div class="fw-bold text-dark small">คำขอของฉัน</div>
+                    <div class="text-muted" style="font-size: 0.78rem;">ติดตามสถานะอนุมัติ</div>
+                </div>
+            </a>
+        </div>
+    </div>
+    
+    <!-- Widget แสดงผลสถิติส่วนตัว (4 กล่องแบบคลิกเพื่อเปิดหน้าได้) -->
+    <div class="row g-3 mb-5">
+        <div class="col-12 col-md-6 col-xl-3">
+            <a href="#borrowed-section" class="card widget-card bg-primary-grad shadow-sm h-100 p-3">
+                <div class="card-body d-flex justify-content-between align-items-center p-1">
                     <div>
-                        <h5 class="fw-light mb-2">ครุภัณฑ์ที่กำลังยืม</h5>
-                        <h1 class="fw-bold mb-0"><?php echo $borrowCount; ?> <span class="fs-5 fw-normal">รายการ</span></h1>
+                        <h6 class="fw-light mb-1 text-white-50">ครุภัณฑ์ที่กำลังยืม</h6>
+                        <h2 class="fw-bold mb-0"><?php echo $borrowCount; ?> <span class="fs-6 fw-normal">รายการ</span></h2>
                     </div>
                     <i class="fa-solid fa-hand-holding-hand widget-icon"></i>
                 </div>
-            </div>
+            </a>
         </div>
         
-        <div class="col-md-6">
-            <div class="card widget-card bg-danger-grad shadow-sm h-100 p-4">
-                <div class="card-body d-flex justify-content-between align-items-center">
+        <div class="col-12 col-md-6 col-xl-3">
+            <a href="#borrowed-section" class="card widget-card bg-danger-grad shadow-sm h-100 p-3">
+                <div class="card-body d-flex justify-content-between align-items-center p-1">
                     <div>
-                        <h5 class="fw-light mb-2">ครุภัณฑ์เลยกำหนดคืน (Overdue)</h5>
-                        <h1 class="fw-bold mb-0"><?php echo $overdueCount; ?> <span class="fs-5 fw-normal">รายการ</span></h1>
+                        <h6 class="fw-light mb-1 text-white-50">ครุภัณฑ์เลยกำหนดคืน</h6>
+                        <h2 class="fw-bold mb-0"><?php echo $overdueCount; ?> <span class="fs-6 fw-normal">รายการ</span></h2>
                     </div>
                     <i class="fa-solid fa-triangle-exclamation widget-icon"></i>
                 </div>
-            </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-3">
+            <a href="history.php" class="card widget-card bg-success-grad shadow-sm h-100 p-3">
+                <div class="card-body d-flex justify-content-between align-items-center p-1">
+                    <div>
+                        <h6 class="fw-light mb-1 text-white-50">ประวัติการยืม-คืนทั้งหมด</h6>
+                        <h2 class="fw-bold mb-0"><?php echo $totalHistoryCount; ?> <span class="fs-6 fw-normal">ครั้ง</span></h2>
+                    </div>
+                    <i class="fa-solid fa-clock-rotate-left widget-icon"></i>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-md-6 col-xl-3">
+            <a href="request_item.php#myRequestsTable" class="card widget-card bg-purple-grad shadow-sm h-100 p-3">
+                <div class="card-body d-flex justify-content-between align-items-center p-1">
+                    <div>
+                        <h6 class="fw-light mb-1 text-white-50">คำขอขึ้นทะเบียนของฉัน</h6>
+                        <h2 class="fw-bold mb-0"><?php echo $myRequestCount; ?> <span class="fs-6 fw-normal">รายการ</span></h2>
+                    </div>
+                    <i class="fa-solid fa-clipboard-list widget-icon"></i>
+                </div>
+            </a>
         </div>
     </div>
     
     <!-- ส่วน: ตารางรายการที่กำลังยืม -->
-    <div class="card shadow-sm border-0 rounded-4 mb-5">
+    <div class="card shadow-sm border-0 rounded-4 mb-5" id="borrowed-section">
         <div class="card-header bg-white border-0 pt-4 pb-2">
-            <h5 class="fw-bold text-warning mb-0">
-                <i class="fa-solid fa-clock-rotate-left me-2"></i> รายการครุภัณฑ์ที่คุณกำลังยืม (รอส่งคืน)
-            </h5>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="fw-bold text-warning mb-0">
+                    <i class="fa-solid fa-clock-rotate-left me-2"></i> รายการครุภัณฑ์ที่คุณกำลังยืม (รอส่งคืน)
+                </h5>
+                <a href="history.php" class="btn btn-outline-warning btn-sm rounded-pill px-3 fw-semibold">
+                    <i class="fa-solid fa-clock-rotate-left me-1"></i> ดูประวัติการยืม-คืนทั้งหมด <i class="fa-solid fa-arrow-right ms-1"></i>
+                </a>
+            </div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -182,11 +406,16 @@ try {
     </div>
 
     <!-- ส่วนล่าง: ตารางรายการครุภัณฑ์พร้อมยืม -->
-    <div class="card shadow-sm border-0 rounded-4">
+    <div class="card shadow-sm border-0 rounded-4" id="available-section">
         <div class="card-header bg-white border-0 pt-4 pb-2">
-            <h5 class="fw-bold text-primary mb-0">
-                <i class="fa-solid fa-box-open me-2"></i> รายการครุภัณฑ์ที่พร้อมให้ยืม
-            </h5>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="fw-bold text-primary mb-0">
+                    <i class="fa-solid fa-box-open me-2"></i> รายการครุภัณฑ์ที่พร้อมให้ยืม (Available Assets)
+                </h5>
+                <a href="request_item.php" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-semibold">
+                    <i class="fa-solid fa-file-circle-plus me-1"></i> เสนอขอขึ้นทะเบียนใหม่ <i class="fa-solid fa-arrow-right ms-1"></i>
+                </a>
+            </div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -211,7 +440,9 @@ try {
                                               LEFT JOIN classification ON classification.classificationID = durable_articles.classificationID 
                                               LEFT JOIN building ON building.buildingID = durable_articles.buildingID
                                               LEFT JOIN building_classroom ON building_classroom.classroomID = durable_articles.classroomID
-                                              WHERE durable_articles.statusID = 's0001'";
+                                              WHERE durable_articles.statusID = 's0001' 
+                                                AND (durable_articles.is_approved = 1 OR durable_articles.is_approved IS NULL)
+                                                AND (durable_articles.is_visible = 1 OR durable_articles.is_visible IS NULL)";
                             
                             $stmt = $pdo->query($sql_Available);
                             $availableItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -256,11 +487,14 @@ try {
 <!-- DataTables JS -->
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.4.1/js/dataTables.responsive.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.4.1/js/responsive.bootstrap5.min.js"></script>
 
 <script>
     $(document).ready(function() {
-        // เปิดใช้งานไลบรารี DataTables สำหรับการค้นหาและแบ่งหน้า
+        // เปิดใช้งานไลบรารี DataTables สำหรับการค้นหาและแบ่งหน้า พร้อม Responsive
         var table = $('#availableItemsTable').DataTable({
+            "responsive": true,
             "language": {
                 "url": "//cdn.datatables.net/plug-ins/1.13.4/i18n/th.json" // ภาษาไทย
             },
@@ -292,6 +526,7 @@ try {
         });
 
         $('#borrowedItemsTable').DataTable({
+            "responsive": true,
             "language": {
                 "url": "//cdn.datatables.net/plug-ins/1.13.4/i18n/th.json"
             },

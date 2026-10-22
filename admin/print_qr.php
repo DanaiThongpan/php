@@ -12,7 +12,7 @@ require_once '../control/connectPDO_dev.php';
 $da_id = $_GET['da_id'] ?? '';
 
 if (empty($da_id)) {
-    echo "ไม่พบรหัสครุภัณฑ์";
+    header("Location: print_qrcode.php");
     exit();
 }
 
@@ -34,7 +34,8 @@ if (!$item) {
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
 $domain = $_SERVER['HTTP_HOST'];
 $base_dir = dirname(dirname($_SERVER['SCRIPT_NAME'])); // พาธหลักของโปรเจกต์
-$targetUrl = $protocol . "://" . $domain . $base_dir . "/user/borrow_action.php?da_id=" . urlencode($item['DA_Number']);
+$base_path = ($base_dir === '/' || $base_dir === '\\') ? '' : rtrim($base_dir, '/\\');
+$targetUrl = $protocol . "://" . $domain . $base_path . "/borrow_request.php?asset_id=" . urlencode($item['DA_Number']);
 
 // ใช้ Google Chart API (หรือ qrserver) ในการ Generate QR Code Image
 $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" . urlencode($targetUrl);

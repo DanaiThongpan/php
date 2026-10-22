@@ -21,7 +21,8 @@ try {
             userActive VARCHAR(1) DEFAULT '1',
             useraccountType VARCHAR(20) NOT NULL,
             userRank VARCHAR(100) DEFAULT NULL,
-            userDepartment VARCHAR(100) DEFAULT NULL
+            userDepartment VARCHAR(100) DEFAULT NULL,
+            userEmail VARCHAR(150) DEFAULT NULL
         );
     ";
     $pdo->exec($createTableQuery);
@@ -41,6 +42,19 @@ try {
         $stmt = $pdo->prepare($insertAdminQuery);
         $stmt->bindParam(':password', $hashedPassword);
         $stmt->execute();
+    }
+
+    // 4. Auto Migration: ตรวจสอบและเพิ่มคอลัมน์ is_visible ในตาราง durable_articles หากยังไม่มี
+    try {
+        $hasDA = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='durable_articles'")->fetchColumn();
+        if ($hasDA) {
+            $cols = $pdo->query("PRAGMA table_info(durable_articles)")->fetchAll(PDO::FETCH_COLUMN, 1);
+            if (!in_array('is_visible', $cols)) {
+                $pdo->exec("ALTER TABLE durable_articles ADD COLUMN is_visible INTEGER DEFAULT 1");
+            }
+        }
+    } catch (Exception $e) {
+        // ข้ามหากติดข้อจำกัดชั่วคราว
     }
     
 } catch (PDOException $e) {

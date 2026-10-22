@@ -1,7 +1,7 @@
 <?php
 // ไฟล์: register.php
 session_start();
-require_once 'control/connectPDO.php';
+require_once 'control/connectPDO_dev.php';
 
 // สร้าง CSRF Token ไว้ใน Session เพื่อใช้ป้องกันการโจมตีข้ามไซต์
 if (empty($_SESSION['csrf_token'])) {
@@ -74,6 +74,11 @@ if (empty($_SESSION['csrf_token'])) {
                                 <input type="text" class="form-control" id="userDepartment" name="userDepartment" required placeholder="เช่น กลุ่มสาระฯ, ฝ่ายบริหาร">
                                 <div class="invalid-feedback">กรุณากรอกสังกัด</div>
                             </div>
+<div class="col-12 mb-3">
+    <label for="userEmail" class="form-label fw-bold">อีเมล (Email)</label>
+    <input type="email" class="form-control" id="userEmail" name="userEmail" required placeholder="example@domain.com">
+    <div class="invalid-feedback">กรุณากรอกอีเมลที่ถูกต้อง</div>
+</div>
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100 py-2 fw-bold fs-5">สร้างบัญชี</button>

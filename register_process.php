@@ -1,7 +1,7 @@
 <?php
 // ไฟล์: register_process.php
 session_start();
-require_once 'control/connectPDO.php';
+require_once 'control/connectPDO_dev.php';
 
 // ป้องกันการเข้าถึงไฟล์นี้ตรงๆ จากบราวเซอร์ (รับเฉพาะการ POST เท่านั้น)
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
@@ -23,13 +23,14 @@ $useraccountName = trim($_POST['useraccountName'] ?? '');
 $password        = $_POST['userPassword'] ?? '';
 $userRank        = trim($_POST['userRank'] ?? '');
 $userDepartment  = trim($_POST['userDepartment'] ?? '');
+$userEmail       = trim($_POST['userEmail'] ?? '');
 
 // กำหนดให้ประเภทเป็น User เสมอ (เพื่อความปลอดภัยหากถูกแก้ HTML ส่งมา)
 $useraccountType = 'UT00000002'; // รหัส User
 $userActive      = '1'; // กำหนดให้สถานะบัญชีเปิดใช้งานอัตโนมัติ
 
 // 3. ตรวจสอบข้อมูลเบื้องต้น (Backend Validation) ป้องกันค่าว่าง
-if (empty($useraccountID) || empty($useraccountName) || empty($password) || empty($userRank) || empty($userDepartment)) {
+if (empty($useraccountID) || empty($useraccountName) || empty($password) || empty($userRank) || empty($userDepartment) || empty($userEmail)) {
     $_SESSION['error'] = "กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง";
     header("Location: register.php");
     exit();
@@ -47,9 +48,9 @@ $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
 // 5. บันทึกข้อมูล (PDO Prepared Statements เพื่อป้องกัน SQL Injection)
 try {
-    // เพิ่มฟิลด์ userRank และ userDepartment ลงในคำสั่ง SQL
-    $sql = "INSERT INTO useraccount (useraccountID, useraccountName, userRank, userDepartment, userPassword, userActive, useraccountType) 
-            VALUES (:id, :name, :rank, :dept, :pass, :active, :type)";
+    // เพิ่มฟิลด์ userRank, userDepartment และ userEmail ลงในคำสั่ง SQL
+    $sql = "INSERT INTO useraccount (useraccountID, useraccountName, userRank, userDepartment, userPassword, userActive, useraccountType, userEmail) 
+            VALUES (:id, :name, :rank, :dept, :pass, :active, :type, :email)";
     
     $stmt = $pdo->prepare($sql);
     
@@ -61,6 +62,7 @@ try {
     $stmt->bindParam(':pass', $hashedPassword);
     $stmt->bindParam(':active', $userActive);
     $stmt->bindParam(':type', $useraccountType);
+    $stmt->bindParam(':email', $userEmail);
     
     // ทำการรันคำสั่ง SQL
     $stmt->execute();
@@ -74,7 +76,7 @@ try {
 
 } catch (PDOException $e) {
     // 6. ดักจับ Error Code 23000 (Duplicate Entry สำหรับ Primary Key)
-    if ($e->getCode() == 23000) {
+    if ($e->getCode() == 23000 || ($e->errorInfo[0] ?? '') === '23000') {
         $_SESSION['error'] = "ชื่อผู้ใช้งานนี้ (Username) มีในระบบแล้ว กรุณาใช้ชื่ออื่น";
     } else {
         // หากเกิดข้อผิดพลาดอื่น ๆ จากฐานข้อมูล
