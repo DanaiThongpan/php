@@ -103,10 +103,13 @@ try {
         $existingSettingCols[] = $col['name'];
     }
     $extraCols = [
-        'oauth_client_id'     => 'TEXT',
-        'oauth_client_secret' => 'TEXT',
-        'oauth_refresh_token' => 'TEXT',
-        'is_active'           => 'INTEGER NOT NULL DEFAULT 1'
+        'oauth_client_id'        => 'TEXT',
+        'oauth_client_secret'    => 'TEXT',
+        'oauth_refresh_token'    => 'TEXT',
+        'is_active'              => 'INTEGER NOT NULL DEFAULT 1',
+        'sender_email'           => "TEXT DEFAULT ''",
+        'reminder_frequency'     => "TEXT DEFAULT 'daily'",
+        'reminder_days'          => "INTEGER DEFAULT 1"
     ];
     foreach ($extraCols as $colName => $colType) {
         if (!in_array($colName, $existingSettingCols)) {

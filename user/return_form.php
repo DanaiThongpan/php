@@ -8,6 +8,7 @@ if (!isset($_SESSION['Selogin']) || $_SESSION['Selogin'] != 1) {
 }
 
 require_once '../control/connectPDO_dev.php';
+require_once __DIR__ . '/../includes/BorrowService.php';
 
 $useraccountID = $_SESSION['SeUser'];
 $useraccountName = $_SESSION['Sename'];
@@ -29,60 +30,42 @@ if (empty($id_borrow)) {
 $sqlBorrowInfo = "SELECT b.*, da.DA_Number, da.DA_ListName, da.DA_Brand 
                   FROM borrow_back b
                   JOIN durable_articles da ON b.DA_ID = da.DA_ID
-                  WHERE b.IDborrow_back = :id_borrow AND (b.Date_back IS NULL OR b.Date_back = '')";
+                  WHERE b.IDborrow_back = :id_borrow AND (b.status != 'returned' OR b.status IS NULL)";
 $stmtBorrowInfo = $pdo->prepare($sqlBorrowInfo);
 $stmtBorrowInfo->execute([':id_borrow' => $id_borrow]);
 $borrowData = $stmtBorrowInfo->fetch();
 
 if (!$borrowData) {
-    echo "<script>alert('ไม่พบข้อมูลการยืมนี้ หรือถูกส่งคืนไปแล้ว'); window.location.href='main.php';</script>";
+    echo "<script>alert('ไม่พบข้อมูลการยืมนี้ หรือถูกส่งคืนและอนุมัติไปแล้ว'); window.location.href='main.php';</script>";
+    exit();
+}
+
+if (($borrowData['status'] ?? '') === 'pending_return') {
+    echo "<script>alert('รายการนี้ได้แจ้งส่งคืนไปแล้ว อยู่ระหว่างรอเจ้าของหรือผู้ดูแลอนุมัติรับคืน'); window.location.href='main.php#borrowed-section';</script>";
     exit();
 }
 
 // เมื่อกดบันทึกแบบฟอร์มส่งคืน (POST Request)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $date_Back = $_POST['date_Back'];
-    $name_Back = $_POST['name_Back'];
-    $rank_Back = $_POST['rank_Back'];
-    $detail_Back = $_POST['detail_Back'];
-    $timeStampDateNow = date('Y-m-d H:i:s');
+    $name_Back   = $_POST['name_Back'] ?? $useraccountName;
+    $rank_Back   = $_POST['rank_Back'] ?? '';
+    $detail_Back = $_POST['detail_Back'] ?? '';
 
-    try {
-        $pdo->beginTransaction();
+    $res = BorrowService::requestReturn($pdo, [
+        'borrow_id'        => $id_borrow,
+        'returned_by_name' => $name_Back,
+        'returned_by_rank' => $rank_Back,
+        'returned_by_uid'  => $useraccountID,
+        'detail_back'      => $detail_Back
+    ]);
 
-        // 1. อัปเดตข้อมูลการส่งคืนในตาราง borrow_back
-        $sqlUpdateBorrow = "UPDATE borrow_back 
-                            SET Date_back = :date_back, 
-                                Name_back = :name_back, 
-                                Rank_back = :rank_back, 
-                                Detail_back = :detail_back, 
-                                useraccountID_back = :uid_back, 
-                                timestamp_back = :timestamp 
-                            WHERE IDborrow_back = :id_borrow";
-        
-        $stmtUpdateBorrow = $pdo->prepare($sqlUpdateBorrow);
-        $stmtUpdateBorrow->execute([
-            ':date_back' => $date_Back,
-            ':name_back' => $name_Back,
-            ':rank_back' => $rank_Back,
-            ':detail_back' => $detail_Back,
-            ':uid_back' => $useraccountID,
-            ':timestamp' => $timeStampDateNow,
-            ':id_borrow' => $id_borrow
-        ]);
-
-        // 2. อัปเดตสถานะครุภัณฑ์กลับมาเป็น 'พร้อมใช้งาน' (s0001)
-        $sqlUpdateDA = "UPDATE durable_articles SET statusID = 's0001' WHERE DA_ID = :da_id";
-        $stmtUpdateDA = $pdo->prepare($sqlUpdateDA);
-        $stmtUpdateDA->execute([':da_id' => $borrowData['DA_ID']]);
-
-        $pdo->commit();
-        echo "<script>alert('บันทึกการส่งคืนครุภัณฑ์สำเร็จ ขอบคุณครับ!'); window.location.href='main.php';</script>";
+    if ($res['success']) {
+        $_SESSION['flash_msg'] = 'แจ้งส่งคืนครุภัณฑ์เรียบร้อยแล้ว! กรุณารอเจ้าของหรือผู้ดูแลระบบตรวจสอบและกดยืนยันการรับคืน';
+        $_SESSION['flash_type'] = 'info';
+        header("Location: main.php#borrowed-section");
         exit();
-
-    } catch (PDOException $e) {
-        $pdo->rollBack();
-        $errorMsg = "เกิดข้อผิดพลาด: " . $e->getMessage();
+    } else {
+        $errorMsg = "เกิดข้อผิดพลาด: " . $res['message'];
     }
 }
 ?>

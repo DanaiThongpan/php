@@ -132,6 +132,96 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action']) && 
     }
 }
 
+// =============================================================================
+// AJAX Handler: อัปเดตสถานะความพร้อมครุภัณฑ์ (Update Status & Optional Repair Log)
+// =============================================================================
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_status') {
+    header('Content-Type: application/json; charset=UTF-8');
+    
+    $da_id     = trim($_POST['da_id'] ?? '');
+    $newStatus = trim($_POST['status_id'] ?? '');
+    $note      = trim($_POST['repair_note'] ?? '');
+    $price     = trim($_POST['repair_price'] ?? '0');
+
+    if (empty($da_id) || empty($newStatus)) {
+        echo json_encode(['status' => 'error', 'message' => 'ข้อมูลไม่ครบถ้วนหรือไม่ถูกต้อง']);
+        exit();
+    }
+
+    // อนุญาตเฉพาะรหัสสถานะ s0001 (พร้อมใช้งาน) หรือ s0002 (ชำรุด/ไม่พร้อมใช้งาน)
+    if (!in_array($newStatus, ['s0001', 's0002'])) {
+        echo json_encode(['status' => 'error', 'message' => 'รหัสสถานะไม่ถูกต้อง (อนุญาตเฉพาะ s0001 หรือ s0002)']);
+        exit();
+    }
+
+    try {
+        // ตรวจสอบสิทธิ์ความเป็นเจ้าของหากไม่ใช่ Super Admin
+        if (!$isSuperAdmin) {
+            $stmtAuth = $pdo->prepare("SELECT owner_department, created_by FROM durable_articles WHERE DA_ID = :id");
+            $stmtAuth->execute([':id' => $da_id]);
+            $ownerRow = $stmtAuth->fetch(PDO::FETCH_ASSOC);
+            if (!$ownerRow || ($ownerRow['owner_department'] !== $currentUserDept && $ownerRow['created_by'] !== $currentUserID)) {
+                echo json_encode(['status' => 'error', 'message' => 'คุณไม่มีสิทธิ์แก้ไขสถานะครุภัณฑ์ของแผนกอื่น']);
+                exit();
+            }
+        }
+
+        // ตรวจสอบว่าครุภัณฑ์กำลังถูกยืมอยู่หรือไม่
+        $stmtBorrow = $pdo->prepare("SELECT IDborrow_back FROM borrow_back WHERE DA_ID = :id AND (status = 'borrowed' OR status = 'ยังไม่ส่งคืน' OR (Date_back IS NULL AND status != 'returned')) LIMIT 1");
+        $stmtBorrow->execute([':id' => $da_id]);
+        $borrowCheck = $stmtBorrow->fetchColumn();
+        if (!empty($borrowCheck)) {
+            echo json_encode(['status' => 'error', 'message' => 'ไม่สามารถเปลี่ยนสถานะได้ เนื่องจากครุภัณฑ์นี้กำลังถูกยืมใช้งานอยู่']);
+            exit();
+        }
+
+        $pdo->beginTransaction();
+
+        // อัปเดตสถานะใน durable_articles
+        $stmtUp = $pdo->prepare("UPDATE durable_articles SET statusID = :statusID WHERE DA_ID = :id");
+        $stmtUp->execute([
+            ':statusID' => $newStatus,
+            ':id'       => $da_id
+        ]);
+
+        // หากมีการบันทึกประวัติการชำรุด/แจ้งซ่อม (ถ้ามีระบุข้อความ)
+        if (!empty($note)) {
+            $repairPriceVal = is_numeric($price) ? floatval($price) : 0;
+            $repairDate = date('Y-m-d');
+            $nextId = (int)$pdo->query("SELECT MAX(CAST(repairID AS INTEGER)) FROM repair")->fetchColumn() + 1;
+            if ($nextId < 1) $nextId = 1;
+            $newRepairID = (string)$nextId;
+
+            $stmtRep = $pdo->prepare("INSERT INTO repair (repairID, repair_Hisory, repair_Price, DA_ID, repair_Date) VALUES (:rid, :history, :price, :da_id, :rdate)");
+            $stmtRep->execute([
+                ':rid'     => $newRepairID,
+                ':history' => $note,
+                ':price'   => $repairPriceVal,
+                ':da_id'   => $da_id,
+                ':rdate'   => $repairDate
+            ]);
+        }
+
+        $pdo->commit();
+
+        $statusText = ($newStatus === 's0001') ? 'พร้อมใช้งาน' : 'ชำรุด / ไม่พร้อมใช้งาน';
+        echo json_encode([
+            'status'     => 'success',
+            'message'    => 'อัปเดตสถานะครุภัณฑ์เป็น "' . $statusText . '" สำเร็จแล้ว',
+            'da_id'      => $da_id,
+            'status_id'  => $newStatus,
+            'status_text'=> $statusText
+        ]);
+        exit();
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        echo json_encode(['status' => 'error', 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
+        exit();
+    }
+}
+
 // ดึงข้อมูลแผนกสดจากตาราง useraccount เพื่อความแม่นยำหาก Session ยังไม่ถูกรีเฟรช
 if (empty($currentUserDept) && !empty($currentUserID)) {
     $stmtDept = $pdo->prepare("SELECT userDepartment FROM useraccount WHERE useraccountID = :uid");
@@ -645,19 +735,29 @@ require_once __DIR__ . '/../component/admin_navbar.php';
                             </td>
 
                             <!-- 8. สถานะความพร้อม -->
-                            <td class="text-center text-nowrap">
+                            <td class="text-center text-nowrap" id="status-cell-<?= htmlspecialchars($da['DA_ID']); ?>">
                                 <?php if ($isBorrowed): ?>
                                     <span class="badge bg-warning text-dark border border-warning px-2 py-1" title="ผู้ยืม: <?= htmlspecialchars($da['Name_borrow'] ?? '-') ?> (กำหนดส่ง: <?= htmlspecialchars($da['Deadline_borrow'] ?? '-') ?>)">
                                         <i class="fa-solid fa-clock-rotate-left me-1"></i> กำลังถูกยืม
                                     </span>
                                 <?php elseif ($isBroken): ?>
-                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
-                                        <i class="fa-solid fa-triangle-exclamation me-1"></i> ชำรุด/ไม่พร้อม
-                                    </span>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-danger py-0 px-2 rounded-pill btn-change-status shadow-none" 
+                                            data-id="<?= htmlspecialchars($da['DA_ID']); ?>" 
+                                            data-name="<?= htmlspecialchars($da['DA_ListName'], ENT_QUOTES); ?>" 
+                                            data-status="s0002"
+                                            title="คลิกเพื่อเปลี่ยนสถานะ (ปัจจุบัน: ชำรุด/ไม่พร้อม)">
+                                        <i class="fa-solid fa-triangle-exclamation me-1"></i> ชำรุด/ไม่พร้อม <i class="fa-solid fa-pen ms-1 small"></i>
+                                    </button>
                                 <?php else: ?>
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-                                        <i class="fa-solid fa-circle-check me-1"></i> พร้อมใช้งาน
-                                    </span>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-success py-0 px-2 rounded-pill btn-change-status shadow-none" 
+                                            data-id="<?= htmlspecialchars($da['DA_ID']); ?>" 
+                                            data-name="<?= htmlspecialchars($da['DA_ListName'], ENT_QUOTES); ?>" 
+                                            data-status="s0001"
+                                            title="คลิกเพื่อเปลี่ยนสถานะ (ปัจจุบัน: พร้อมใช้งาน)">
+                                        <i class="fa-solid fa-circle-check me-1"></i> พร้อมใช้งาน <i class="fa-solid fa-pen ms-1 small"></i>
+                                    </button>
                                 <?php endif; ?>
                             </td>
 
@@ -676,6 +776,18 @@ require_once __DIR__ . '/../component/admin_navbar.php';
                                     <a href="edit_durable_article.php?da_id=<?= urlencode($da['DA_ID']); ?>" class="btn btn-warning btn-sm btn-action text-white" title="แก้ไขข้อมูล">
                                         <i class="fa-solid fa-pen-to-square"></i>
                                     </a>
+
+                                    <!-- ปุ่มอัปเดตสถานะความพร้อม (พร้อมใช้งาน / ชำรุด) -->
+                                    <?php if (!$isBorrowed): ?>
+                                    <button type="button" 
+                                            class="btn btn-outline-danger btn-sm btn-action btn-change-status" 
+                                            data-id="<?= htmlspecialchars($da['DA_ID']); ?>" 
+                                            data-name="<?= htmlspecialchars($da['DA_ListName'], ENT_QUOTES); ?>" 
+                                            data-status="<?= $isBroken ? 's0002' : 's0001'; ?>" 
+                                            title="อัปเดตสถานะ (พร้อมใช้งาน / ชำรุด)">
+                                        <i class="fa-solid fa-arrows-rotate"></i>
+                                    </button>
+                                    <?php endif; ?>
 
                                     <!-- ปุ่มประวัติการซ่อมบำรุง -->
                                     <a href="page_Repair_AddEdit.php?DAID=<?= urlencode($da['DA_ID']); ?>" class="btn btn-outline-secondary btn-sm btn-action" title="ประวัติการซ่อมบำรุง">
@@ -794,6 +906,85 @@ require_once __DIR__ . '/../component/admin_navbar.php';
     </div>
 </div>
 
+<!-- ========================================================================= -->
+<!-- Modal ปรับปรุงสถานะความพร้อมครุภัณฑ์ (Update Asset Status Modal) -->
+<!-- ========================================================================= -->
+<div class="modal fade" id="modalUpdateStatus" tabindex="-1" aria-labelledby="modalUpdateStatusLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-gradient bg-primary text-white py-3 px-4 rounded-top-4">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-arrows-rotate fs-5"></i>
+                    <h5 class="modal-title fw-bold mb-0" id="modalUpdateStatusLabel">อัปเดตสถานะความพร้อมครุภัณฑ์</h5>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formUpdateStatus">
+                <input type="hidden" name="action" value="update_status">
+                <input type="hidden" name="da_id" id="statusModalDaId" value="">
+                
+                <div class="modal-body p-4">
+                    <!-- รายละเอียดครุภัณฑ์เบื้องต้น -->
+                    <div class="bg-light p-3 rounded-3 mb-3 border">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="fa-solid fa-box text-primary mt-1"></i>
+                            <div>
+                                <div class="fw-bold text-dark" id="statusModalDaName">-</div>
+                                <small class="text-muted" id="statusModalDaIdText">รหัส: -</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- เลือกสถานะความพร้อม -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-secondary mb-2">เลือกสถานะใหม่:</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <input type="radio" class="btn-check" name="status_id" id="statusRadioAvailable" value="s0001" autocomplete="off" checked>
+                                <label class="btn btn-outline-success w-100 py-2 d-flex flex-column align-items-center justify-content-center h-100" for="statusRadioAvailable">
+                                    <i class="fa-solid fa-circle-check fs-4 mb-1"></i>
+                                    <span class="fw-bold">พร้อมใช้งาน</span>
+                                    <small class="text-muted" style="font-size: 0.75rem;">สภาพดี ยืมได้</small>
+                                </label>
+                            </div>
+                            <div class="col-6">
+                                <input type="radio" class="btn-check" name="status_id" id="statusRadioBroken" value="s0002" autocomplete="off">
+                                <label class="btn btn-outline-danger w-100 py-2 d-flex flex-column align-items-center justify-content-center h-100" for="statusRadioBroken">
+                                    <i class="fa-solid fa-triangle-exclamation fs-4 mb-1"></i>
+                                    <span class="fw-bold">ชำรุด / ไม่พร้อม</span>
+                                    <small class="text-muted" style="font-size: 0.75rem;">ส่งซ่อม/ระงับยืม</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- กล่องบันทึกข้อมูลการแจ้งซ่อม/หมายเหตุ (แสดงเมื่อเลือกชำรุด หรือต้องการบันทึกประวัติ) -->
+                    <div id="repairNoteBox" class="border rounded-3 p-3 bg-danger-subtle bg-opacity-25 mb-2" style="display: none;">
+                        <h6 class="fw-bold text-danger mb-2 d-flex align-items-center gap-1">
+                            <i class="fa-solid fa-screwdriver-wrench"></i> บันทึกประวัติการชำรุด / ส่งซ่อม
+                        </h6>
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold text-dark">รายละเอียดอาการชำรุด / หมายเหตุ:</label>
+                            <textarea class="form-control form-control-sm" name="repair_note" id="statusModalNote" rows="2" placeholder="ระบุอาการชำรุด หรือรายละเอียดการส่งซ่อม (ถ้ามี)"></textarea>
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label small fw-semibold text-dark">ประมาณการค่าซ่อม (บาท):</label>
+                            <input type="number" step="0.01" class="form-control form-control-sm" name="repair_price" id="statusModalPrice" placeholder="0.00">
+                        </div>
+                        <small class="text-muted" style="font-size: 0.75rem;">* ข้อมูลนี้จะถูกบันทึกเข้าตารางประวัติการซ่อมบำรุงโดยอัตโนมัติ</small>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light py-2 px-4 rounded-bottom-4">
+                    <button type="button" class="btn btn-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm" id="btnSaveStatus">
+                        <i class="fa-solid fa-floppy-disk me-1"></i> บันทึกสถานะ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Scripts -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -863,22 +1054,32 @@ require_once __DIR__ . '/../component/admin_navbar.php';
                             `;
                         } else if (d.statusID !== 's0001') {
                             statusBanner = `
-                                <div class="alert alert-danger border-danger shadow-sm rounded-3 py-2 px-3 mb-3 d-flex align-items-center gap-2">
-                                    <i class="fa-solid fa-triangle-exclamation fs-4 text-danger"></i>
-                                    <div>
-                                        <div class="fw-bold">สถานะ: ชำรุด / ไม่พร้อมใช้งาน</div>
-                                        <small class="text-muted">รายการนี้ระบุสถานะว่าไม่พร้อมใช้งาน</small>
+                                <div class="alert alert-danger border-danger shadow-sm rounded-3 py-2 px-3 mb-3 d-flex align-items-center justify-content-between gap-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="fa-solid fa-triangle-exclamation fs-4 text-danger"></i>
+                                        <div>
+                                            <div class="fw-bold">สถานะ: ชำรุด / ไม่พร้อมใช้งาน</div>
+                                            <small class="text-muted">รายการนี้ระบุสถานะว่าไม่พร้อมใช้งาน</small>
+                                        </div>
                                     </div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger bg-white btn-change-status" data-id="${d.DA_ID}" data-name="${escapeHtml(d.DA_ListName || '')}" data-status="s0002">
+                                        <i class="fa-solid fa-arrows-rotate me-1"></i> เปลี่ยนสถานะ
+                                    </button>
                                 </div>
                             `;
                         } else {
                             statusBanner = `
-                                <div class="alert alert-success border-success shadow-sm rounded-3 py-2 px-3 mb-3 d-flex align-items-center gap-2">
-                                    <i class="fa-solid fa-circle-check fs-4 text-success"></i>
-                                    <div>
-                                        <div class="fw-bold">สถานะ: พร้อมใช้งาน (Available)</div>
-                                        <small class="text-muted">ครุภัณฑ์สภาพปกติและพร้อมสำหรับทำรายการยืม</small>
+                                <div class="alert alert-success border-success shadow-sm rounded-3 py-2 px-3 mb-3 d-flex align-items-center justify-content-between gap-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="fa-solid fa-circle-check fs-4 text-success"></i>
+                                        <div>
+                                            <div class="fw-bold">สถานะ: พร้อมใช้งาน (Available)</div>
+                                            <small class="text-muted">ครุภัณฑ์สภาพปกติและพร้อมสำหรับทำรายการยืม</small>
+                                        </div>
                                     </div>
+                                    <button type="button" class="btn btn-sm btn-outline-success bg-white btn-change-status" data-id="${d.DA_ID}" data-name="${escapeHtml(d.DA_ListName || '')}" data-status="s0001">
+                                        <i class="fa-solid fa-arrows-rotate me-1"></i> เปลี่ยนสถานะ
+                                    </button>
                                 </div>
                             `;
                         }
@@ -1196,7 +1397,147 @@ require_once __DIR__ . '/../component/admin_navbar.php';
             });
         });
 
+        // =====================================================================
+        // จัดการคลิกปุ่มเปลี่ยนสถานะความพร้อม (Change Status Modal)
+        // =====================================================================
+        const statusModalElement = document.getElementById('modalUpdateStatus');
+        const statusModalInstance = statusModalElement ? new bootstrap.Modal(statusModalElement) : null;
+
+        $(document).on('click', '.btn-change-status', function(e) {
+            e.preventDefault();
+            const daId = $(this).data('id');
+            const daName = $(this).data('name') || '';
+            const currStatus = $(this).data('status') || 's0001';
+
+            if (!daId) return;
+
+            $('#statusModalDaId').val(daId);
+            $('#statusModalDaName').text(daName);
+            $('#statusModalDaIdText').text('รหัสครุภัณฑ์: ' + daId);
+            $('#statusModalNote').val('');
+            $('#statusModalPrice').val('');
+
+            if (currStatus === 's0002') {
+                $('#statusRadioBroken').prop('checked', true);
+                $('#repairNoteBox').show();
+            } else {
+                $('#statusRadioAvailable').prop('checked', true);
+                $('#repairNoteBox').hide();
+            }
+
+            if (statusModalInstance) {
+                statusModalInstance.show();
+            }
+        });
+
+        // Toggle แสดงกล่องบันทึกการส่งซ่อมเมื่อเลือก "ชำรุด"
+        $('input[name="status_id"]').on('change', function() {
+            if ($(this).val() === 's0002') {
+                $('#repairNoteBox').slideDown(200);
+            } else {
+                $('#repairNoteBox').slideUp(200);
+            }
+        });
+
+        // บันทึกฟอร์มสถานะ
+        $('#formUpdateStatus').on('submit', function(e) {
+            e.preventDefault();
+            const submitBtn = $('#btnSaveStatus');
+            const daId = $('#statusModalDaId').val();
+            const chosenStatus = $('input[name="status_id"]:checked').val();
+            const formData = $(this).serialize();
+
+            submitBtn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin me-1"></i> กำลังบันทึก...');
+
+            $.ajax({
+                url: 'manage_data.php',
+                type: 'POST',
+                dataType: 'json',
+                data: formData,
+                success: function(res) {
+                    submitBtn.prop('disabled', false).html('<i class="fa-solid fa-floppy-disk me-1"></i> บันทึกสถานะ');
+
+                    if (res.status === 'success') {
+                        if (statusModalInstance) {
+                            statusModalInstance.hide();
+                        }
+
+                        // แสดงแจ้งเตือนสำเร็จ
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'อัปเดตสถานะสำเร็จ',
+                            text: res.message,
+                            timer: 1800,
+                            showConfirmButton: false
+                        });
+
+                        // อัปเดต DOM ในตารางทันที (Column 8 & Column 9)
+                        const statusCell = $('#status-cell-' + daId);
+                        const daName = $('#statusModalDaName').text();
+                        if (statusCell.length > 0) {
+                            if (chosenStatus === 's0001') {
+                                statusCell.html(`
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-success py-0 px-2 rounded-pill btn-change-status shadow-none" 
+                                            data-id="${daId}" 
+                                            data-name="${escapeHtml(daName)}" 
+                                            data-status="s0001"
+                                            title="คลิกเพื่อเปลี่ยนสถานะ (ปัจจุบัน: พร้อมใช้งาน)">
+                                        <i class="fa-solid fa-circle-check me-1"></i> พร้อมใช้งาน <i class="fa-solid fa-pen ms-1 small"></i>
+                                    </button>
+                                `);
+                            } else {
+                                statusCell.html(`
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-danger py-0 px-2 rounded-pill btn-change-status shadow-none" 
+                                            data-id="${daId}" 
+                                            data-name="${escapeHtml(daName)}" 
+                                            data-status="s0002"
+                                            title="คลิกเพื่อเปลี่ยนสถานะ (ปัจจุบัน: ชำรุด/ไม่พร้อม)">
+                                        <i class="fa-solid fa-triangle-exclamation me-1"></i> ชำรุด/ไม่พร้อม <i class="fa-solid fa-pen ms-1 small"></i>
+                                    </button>
+                                `);
+                            }
+                        }
+
+                        // อัปเดต data-status ของปุ่มใน Column 9
+                        $('.btn-change-status[data-id="' + daId + '"]').data('status', chosenStatus);
+
+                        // ถ้า detail modal กำลังเปิดอยู่ ให้โหลดข้อมูลใหม่
+                        if ($('#detailModal').hasClass('show')) {
+                            $('.btn-view-detail[data-id="' + daId + '"]').trigger('click');
+                        }
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'ไม่สามารถบันทึกได้',
+                            text: res.message || 'เกิดข้อผิดพลาดในการบันทึกสถานะ'
+                        });
+                    }
+                },
+                error: function(xhr) {
+                    submitBtn.prop('disabled', false).html('<i class="fa-solid fa-floppy-disk me-1"></i> บันทึกสถานะ');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'เกิดข้อผิดพลาดในการเชื่อมต่อ',
+                        text: 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้ (HTTP ' + xhr.status + ')'
+                    });
+                }
+            });
+        });
+
     });
+
+    // Helper: หลีกเลี่ยง XSS ใน HTML Strings
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
 
     // =========================================================================
     // ฟังก์ชันเปิดดูรูปภาพครุภัณฑ์ (Show Image Modal)

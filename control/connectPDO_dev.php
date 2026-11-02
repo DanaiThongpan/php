@@ -44,13 +44,20 @@ try {
         $stmt->execute();
     }
 
-    // 4. Auto Migration: ตรวจสอบและเพิ่มคอลัมน์ is_visible ในตาราง durable_articles หากยังไม่มี
+    // 4. Auto Migration: ตรวจสอบและเพิ่มคอลัมน์ is_visible ในตาราง durable_articles และ is_active ใน building
     try {
         $hasDA = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='durable_articles'")->fetchColumn();
         if ($hasDA) {
             $cols = $pdo->query("PRAGMA table_info(durable_articles)")->fetchAll(PDO::FETCH_COLUMN, 1);
             if (!in_array('is_visible', $cols)) {
                 $pdo->exec("ALTER TABLE durable_articles ADD COLUMN is_visible INTEGER DEFAULT 1");
+            }
+        }
+        $hasBld = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='building'")->fetchColumn();
+        if ($hasBld) {
+            $colsBld = $pdo->query("PRAGMA table_info(building)")->fetchAll(PDO::FETCH_COLUMN, 1);
+            if (!in_array('is_active', $colsBld)) {
+                $pdo->exec("ALTER TABLE building ADD COLUMN is_active INTEGER DEFAULT 1");
             }
         }
     } catch (Exception $e) {

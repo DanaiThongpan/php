@@ -71,6 +71,9 @@ $pageTitle = $pageTitle ?? 'ระบบบริหารจัดการค�
     <!-- SweetAlert2 CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
+    <!-- jQuery 3.6 (โหลดใน Head เพื่อให้ทุกหน้าสามารถใช้งาน $(document).ready ได้อย่างราบรื่น) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
     <!-- Custom Enterprise Responsive Dashboard CSS & Design System -->
     <link rel="stylesheet" href="../css/admin_responsive.css">
     <link rel="stylesheet" href="../css/admin_dashboard.css">

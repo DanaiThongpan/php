@@ -1,10 +1,8 @@
 <?php
 session_start();
 
-// 1. ตรวจสอบ Security Check สิทธิ์การเข้าถึง (ต้องเป็น User ทั่วไปเท่านั้น)
-// เช็คว่าล็อกอินหรือยัง และ useraccountType ต้องเป็น 'UT00000002' (User)
-// หากเป็นแบบอื่น (เช่น Admin หรือยังไม่ได้ล็อกอิน) ให้เตะกลับไปหน้า Login
-if (!isset($_SESSION['Selogin']) || $_SESSION['Selogin'] != 1 || $_SESSION['useraccountType'] !== 'UT00000002') {
+// 1. ตรวจสอบ Security Check สิทธิ์การเข้าถึง (ต้องล็อกอิน)
+if (!isset($_SESSION['Selogin']) || $_SESSION['Selogin'] != 1) {
     header("Location: ../index.php");
     exit();
 }
@@ -36,18 +34,18 @@ $myRequestCount = 0;
 $todayDate = date('Y-m-d'); // ดึงวันที่ปัจจุบันผ่าน PHP แทนเพื่อความเข้ากันได้กับทั้ง MySQL และ SQLite
 
 try {
-    // 1. จำนวนครุภัณฑ์ที่กำลังยืม (ที่ยังไม่คืน)
-    $stmt = $pdo->prepare("SELECT COUNT(*) AS total FROM borrow_back WHERE useraccountID_borrow = :uid AND (Date_back IS NULL OR Date_back = '')");
+    // 1. จำนวนครุภัณฑ์ที่กำลังยืม (รวมถึงรายการที่แจ้งคืนแล้วแต่รออนุมัติ - นับแบบ DISTINCT ป้องกันซ้ำ)
+    $stmt = $pdo->prepare("SELECT COUNT(DISTINCT DA_ID) AS total FROM borrow_back WHERE useraccountID_borrow = :uid AND (Date_back IS NULL OR Date_back = '' OR status = 'pending_return') AND (status != 'returned' OR status IS NULL)");
     $stmt->execute([':uid' => $useraccountID]);
-    $borrowCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+    $borrowCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
 
-    // 2. จำนวนครุภัณฑ์ที่เลยกำหนดคืน (Overdue)
-    $stmt = $pdo->prepare("SELECT COUNT(*) AS total FROM borrow_back WHERE useraccountID_borrow = :uid AND (Date_back IS NULL OR Date_back = '') AND Deadline_borrow < :today");
+    // 2. จำนวนครุภัณฑ์ที่เลยกำหนดคืน (Overdue - ไม่รวมรายการที่รออนุมัติคืน)
+    $stmt = $pdo->prepare("SELECT COUNT(DISTINCT DA_ID) AS total FROM borrow_back WHERE useraccountID_borrow = :uid AND (Date_back IS NULL OR Date_back = '') AND (status != 'returned' OR status IS NULL) AND (status != 'pending_return' OR status IS NULL) AND Deadline_borrow < :today");
     $stmt->execute([
         ':uid' => $useraccountID,
         ':today' => $todayDate
     ]);
-    $overdueCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+    $overdueCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
 
     // 3. จำนวนประวัติการยืม-คืนทั้งหมดของผู้ใช้คนนี้
     $stmtHist = $pdo->prepare("SELECT COUNT(*) AS total FROM borrow_back WHERE useraccountID_borrow = :uid");
@@ -77,6 +75,8 @@ try {
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" />
     <!-- DataTables Responsive CSS -->
     <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.4.1/css/responsive.bootstrap5.min.css" />
+    <!-- SweetAlert2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
     <style>
         html, body {
@@ -331,6 +331,40 @@ try {
         </div>
     </div>
     
+    <!-- แสดงข้อความแจ้งเตือน Flash Message (เมื่อมีการทำรายการยืม-คืน) -->
+    <?php if (!empty($_SESSION['flash_msg'])): ?>
+        <?php 
+            $fType = $_SESSION['flash_type'] ?? 'success';
+            $alertClass = ($fType === 'error') ? 'danger' : (($fType === 'info') ? 'warning' : 'success');
+            $iconClass = ($fType === 'error') ? 'triangle-exclamation' : (($fType === 'info') ? 'hourglass-half' : 'circle-check');
+            $alertTitle = ($fType === 'error') ? 'เกิดข้อผิดพลาด' : (($fType === 'info') ? 'แจ้งเตือนสถานะ' : 'ทำรายการสำเร็จ!');
+        ?>
+        <div class="alert alert-<?php echo $alertClass; ?> border-0 shadow-sm rounded-4 p-3 mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center">
+                <div class="p-2 bg-<?php echo $alertClass; ?>-subtle text-<?php echo $alertClass; ?> rounded-circle me-3">
+                    <i class="fa-solid fa-<?php echo $iconClass; ?> fa-xl"></i>
+                </div>
+                <div>
+                    <h6 class="fw-bold mb-0 text-dark"><?php echo $alertTitle; ?></h6>
+                    <small class="text-muted"><?php echo htmlspecialchars($_SESSION['flash_msg']); ?></small>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                Swal.fire({
+                    icon: '<?php echo ($fType === "error") ? "error" : (($fType === "info") ? "info" : "success"); ?>',
+                    title: '<?php echo $alertTitle; ?>',
+                    text: <?php echo json_encode($_SESSION['flash_msg']); ?>,
+                    confirmButtonColor: '#0d6efd',
+                    confirmButtonText: 'ตกลง'
+                });
+            });
+        </script>
+        <?php unset($_SESSION['flash_msg'], $_SESSION['flash_type']); ?>
+    <?php endif; ?>
+
     <!-- ส่วน: ตารางรายการที่กำลังยืม -->
     <div class="card shadow-sm border-0 rounded-4 mb-5" id="borrowed-section">
         <div class="card-header bg-white border-0 pt-4 pb-2">
@@ -359,14 +393,22 @@ try {
                     <tbody>
                         <?php
                         try {
-                            // ดึงข้อมูลการยืมของคนที่ล็อกอินอยู่ ที่ยังไม่ได้คืน (Date_back ว่าง หรือ null)
-                            $sql_Borrowed = "SELECT b.IDborrow_back, b.DA_ID, b.Date_borrow, b.Deadline_borrow, 
+                            // ดึงข้อมูลการยืมของคนที่ล็อกอินอยู่ ที่ยังไม่ได้คืน โดยเลือกเฉพาะรายการล่าสุดต่อครุภัณฑ์ (ป้องกันรายการซ้ำซ้อน)
+                            $sql_Borrowed = "SELECT b.IDborrow_back, b.DA_ID, b.Date_borrow, b.Deadline_borrow, b.status, b.Date_back,
                                                     da.DA_Number, da.DA_ListName 
                                              FROM borrow_back b
                                              JOIN durable_articles da ON b.DA_ID = da.DA_ID
-                                             WHERE b.useraccountID_borrow = :uid 
-                                             AND (b.Date_back IS NULL OR b.Date_back = '')
-                                             ORDER BY b.Deadline_borrow ASC";
+                                             INNER JOIN (
+                                                 SELECT DA_ID, MAX(IDborrow_back) AS latest_borrow_id
+                                                 FROM borrow_back
+                                                 WHERE useraccountID_borrow = :uid 
+                                                   AND (status != 'returned' OR status IS NULL)
+                                                   AND (Date_back IS NULL OR Date_back = '' OR status = 'pending_return')
+                                                 GROUP BY DA_ID
+                                             ) latest_b ON b.IDborrow_back = latest_b.latest_borrow_id
+                                             ORDER BY 
+                                                CASE WHEN b.status = 'pending_return' THEN 1 ELSE 0 END,
+                                                b.Deadline_borrow ASC";
                             $stmtB = $pdo->prepare($sql_Borrowed);
                             $stmtB->execute([':uid' => $useraccountID]);
                             $borrowedItems = $stmtB->fetchAll(PDO::FETCH_ASSOC);
@@ -375,22 +417,37 @@ try {
                                 $order = 1;
                                 foreach ($borrowedItems as $row) {
                                     $today = date('Y-m-d');
-                                    $isOverdue = ($row['Deadline_borrow'] < $today);
-                                    $deadlineBadge = $isOverdue ? "<span class='badge bg-danger'>เลยกำหนด</span>" : "<span class='badge bg-success'>ปกติ</span>";
+                                    $isPendingReturn = (($row['status'] ?? '') === 'pending_return');
+                                    $isOverdue       = (!$isPendingReturn && !empty($row['Deadline_borrow']) && $row['Deadline_borrow'] < $today);
+
+                                    if ($isPendingReturn) {
+                                        $deadlineBadge = "<span class='badge bg-warning text-dark'><i class='fa-solid fa-hourglass-half me-1'></i> รอเจ้าของอนุมัติรับคืน</span>";
+                                    } elseif ($isOverdue) {
+                                        $deadlineBadge = "<span class='badge bg-danger'>เลยกำหนด</span>";
+                                    } else {
+                                        $deadlineBadge = "<span class='badge bg-success'>ปกติ</span>";
+                                    }
 
                                     echo "<tr>";
                                     echo "<td>{$order}</td>";
-                                    echo "<td><span class='badge bg-light text-dark border'>" . htmlspecialchars($row['DA_Number']) . "</span></td>";
+                                    echo "<td><span class='badge bg-light text-dark border font-monospace'>" . htmlspecialchars($row['DA_Number']) . "</span></td>";
                                     echo "<td><span class='fw-bold text-secondary'>" . htmlspecialchars($row['DA_ListName']) . "</span></td>";
                                     echo "<td>" . htmlspecialchars($row['Date_borrow']) . "</td>";
                                     echo "<td>" . htmlspecialchars($row['Deadline_borrow']) . " {$deadlineBadge}</td>";
                                     
-                                    // ลิงก์ไปยังหน้าแบบฟอร์มคืนครุภัณฑ์ (V2)
-                                    echo "<td class='text-center'>
-                                            <a href='return_form.php?IDborrow=" . htmlspecialchars($row['IDborrow_back']) . "' class='btn btn-sm btn-warning rounded-pill px-3 shadow-sm'>
+                                    // ปุ่มการจัดการ
+                                    echo "<td class='text-center'>";
+                                    if ($isPendingReturn) {
+                                        echo "<span class='badge bg-warning-subtle text-warning-emphasis border border-warning rounded-pill px-3 py-2'>
+                                                <i class='fa-solid fa-hourglass-half me-1'></i> รออนุมัติคืน
+                                              </span>";
+                                    } else {
+                                        $targetId = !empty($row['DA_Number']) ? $row['DA_Number'] : $row['DA_ID'];
+                                        echo "<a href='../borrow_request.php?asset_id=" . urlencode($targetId) . "' class='btn btn-sm btn-warning rounded-pill px-3 shadow-sm'>
                                                 <i class='fa-solid fa-rotate-left me-1'></i> คืนครุภัณฑ์
-                                            </a>
-                                          </td>";
+                                              </a>";
+                                    }
+                                    echo "</td>";
                                     echo "</tr>";
                                     $order++;
                                 }
@@ -460,9 +517,9 @@ try {
                                     echo "<td>" . htmlspecialchars($row['classificationName']) . "</td>";
                                     echo "<td><i class='fa-solid fa-location-dot text-danger me-1'></i> {$location}</td>";
                                     
-                                    // ลิงก์ไปยังหน้า page_BorrowDA.php (ชี้ Path ย้อนกลับไปโฟลเดอร์หลัก)
+                                    // ลิงก์ไปยังหน้า borrow_request.php (ชี้ Path ย้อนกลับไปโฟลเดอร์หลัก)
                                     echo "<td class='text-center'>
-                                            <a href='borrow_form.php?DAID=" . htmlspecialchars($row['DA_ID']) . "' class='btn btn-sm btn-primary rounded-pill px-3 shadow-sm'>
+                                            <a href='../borrow_request.php?asset_id=" . htmlspecialchars($row['DA_ID']) . "' class='btn btn-sm btn-primary rounded-pill px-3 shadow-sm'>
                                                 <i class='fa-solid fa-hand-holding-hand me-1'></i> ยืมชิ้นนี้
                                             </a>
                                           </td>";

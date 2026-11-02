@@ -22,8 +22,23 @@ echo "[{$nowTimestamp}] Starting Overdue Reminder Cron Job...\n";
 echo "========================================================\n";
 
 try {
+    // โหลดการตั้งค่าระบบและรอบความถี่ในการทวงคืน
+    $stmtConfig = $pdo->query("SELECT is_active, reminder_frequency, reminder_days FROM system_settings WHERE id = 1 LIMIT 1");
+    $settings = $stmtConfig ? $stmtConfig->fetch(PDO::FETCH_ASSOC) : [];
+    
+    $isActive     = isset($settings['is_active']) ? (int)$settings['is_active'] : 1;
+    $reminderFreq = $settings['reminder_frequency'] ?? 'daily';
+    $reminderDays = isset($settings['reminder_days']) ? max(1, (int)$settings['reminder_days']) : 1;
+
+    if ($isActive === 0 || $reminderFreq === 'none') {
+        echo "[{$nowTimestamp}] Overdue email reminders are disabled in settings (is_active={$isActive}, freq={$reminderFreq}). Exiting.\n";
+        exit(0);
+    }
+
+    echo "Reminder frequency setting: {$reminderFreq} (interval: {$reminderDays} day(s))\n";
+
     // 3. Query: ดึงรายการที่ status = 'borrowed' AND due_date < CURRENT_DATE
-    // และ (last_reminded_at is NULL OR DATE(last_reminded_at) < CURRENT_DATE)
+    // และ (last_reminded_at is NULL หรือครบกำหนดตามรอบความถี่ reminder_days)
     $sql = "
         SELECT 
             b.IDborrow_back AS id,
@@ -39,14 +54,15 @@ try {
         LEFT JOIN useraccount u ON b.useraccountID_borrow = u.useraccountID
         WHERE b.status = 'borrowed'
           AND b.due_date < :currentDate
-          AND (b.last_reminded_at IS NULL OR DATE(b.last_reminded_at) < :currentDate2)
+          AND (b.last_reminded_at IS NULL OR DATE(b.last_reminded_at, '+' || :reminderDays || ' days') <= :currentDate2)
         ORDER BY b.due_date ASC
     ";
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([
-        ':currentDate'  => $currentDate,
-        ':currentDate2' => $currentDate
+        ':currentDate'   => $currentDate,
+        ':reminderDays'  => $reminderDays,
+        ':currentDate2'  => $currentDate
     ]);
     $overdueList = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

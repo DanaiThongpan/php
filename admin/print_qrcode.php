@@ -61,7 +61,7 @@ try {
 
 $buildings = [];
 try {
-    $stmtBld = $pdo->query("SELECT buildingID, buildingName FROM building ORDER BY buildingName ASC");
+    $stmtBld = $pdo->query("SELECT buildingID, buildingName FROM building WHERE (is_active = 1 OR is_active IS NULL) ORDER BY buildingName ASC");
     $buildings = $stmtBld->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $buildings = [];
@@ -145,7 +145,21 @@ require_once __DIR__ . '/../component/admin_navbar.php';
 ?>
 <style>
     /* =====================================================================
-     * สไตล์เฉพาะหน้าพิมพ์สติกเกอร์ (Sticker Labels CSS)
+     * 1. CSS VARIABLES สำหรับควบคุมขนาดสติกเกอร์และ QR CODE แบบไดนามิก
+     * ===================================================================== */
+    :root {
+        --sticker-width: 44mm;        /* ความกว้างสติกเกอร์ (ควบคุมจำนวนคอลัมน์อัตโนมัติ) */
+        --sticker-height: 52mm;       /* ความสูงของแต่ละดวง */
+        --qr-img-size: 75px;          /* ขนาดของ QR Code Image */
+        --font-size-header: 7pt;      /* ขนาดฟอนต์ส่วนหัวสติกเกอร์ */
+        --font-size-number: 8pt;      /* ขนาดฟอนต์รหัสครุภัณฑ์ */
+        --font-size-main: 7.5pt;      /* ขนาดฟอนต์ชื่อครุภัณฑ์ */
+        --sticker-padding: 3mm 2.5mm; /* ระยะขอบด้านใน */
+        --sticker-gap: 3mm;           /* ระยะห่างระหว่างดวงสติกเกอร์ */
+    }
+
+    /* =====================================================================
+     * 2. สไตล์หน้าจอปกติ (Screen Preview Styles)
      * ===================================================================== */
     .filter-card {
         border: none;
@@ -155,8 +169,9 @@ require_once __DIR__ . '/../component/admin_navbar.php';
     .preview-wrapper {
         background: #525659;
         padding: 30px 15px;
-        border-radius: 12px;
-        margin-top: 20px;
+        border-radius: 14px;
+        margin-top: 15px;
+        overflow-x: auto;
     }
     .a4-sheet {
         background: white;
@@ -166,21 +181,25 @@ require_once __DIR__ . '/../component/admin_navbar.php';
         padding: 10mm 8mm;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         box-sizing: border-box;
+        transition: all 0.25s ease;
     }
 
-    /* ตารางกริดสติกเกอร์: 3 คอลัมน์ x 4 แถว พอดีกับหน้ากระดาษ A4 */
+    /* ตารางกริดสติกเกอร์: ใช้ CSS Variables ควบคุมจำนวนคอลัมน์แบบ Responsive อัตโนมัติ */
     .sticker-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 4mm;
+        grid-template-columns: repeat(auto-fill, minmax(var(--sticker-width), 1fr));
+        gap: var(--sticker-gap);
         box-sizing: border-box;
+        width: 100%;
+        transition: gap 0.2s ease;
     }
 
-    /* แต่ละดวงสติกเกอร์ (Sticker Label) */
+    /* แต่ละดวงสติกเกอร์ (Sticker Label): ใช้ Flexbox จัดกึ่งกลาง ขยาย/หดพอดี */
     .sticker-item {
         box-sizing: border-box;
-        height: 63mm; /* ความสูงเหมาะสมสำหรับ 4 แถวในกระดาษ A4 */
-        padding: 3.5mm 3mm;
+        width: 100%;
+        height: var(--sticker-height);
+        padding: var(--sticker-padding);
         background: white;
         display: flex;
         flex-direction: column;
@@ -192,6 +211,7 @@ require_once __DIR__ . '/../component/admin_navbar.php';
         overflow: hidden;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
+        transition: height 0.2s ease, padding 0.2s ease;
     }
     .sticker-bordered {
         border: 1px dashed #b0b0b0;
@@ -204,71 +224,98 @@ require_once __DIR__ . '/../component/admin_navbar.php';
     .sticker-header {
         width: 100%;
         border-bottom: 0.5px solid #e0e0e0;
-        padding-bottom: 1.5mm;
-        margin-bottom: 1.5mm;
+        padding-bottom: 1mm;
+        margin-bottom: 1mm;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        font-size: 8pt;
+        font-size: var(--font-size-header);
         color: #555;
+        line-height: 1.1;
+        overflow: hidden;
+        flex-shrink: 0;
+        transition: font-size 0.2s ease;
     }
     .sticker-org-title {
         font-weight: 700;
         color: #0d6efd;
         letter-spacing: -0.2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .sticker-cat-badge {
-        font-size: 7pt;
+        font-size: calc(var(--font-size-header) * 0.95);
         color: #666;
-        max-width: 90px;
+        max-width: 50%;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
-    /* รูป QR Code */
+    /* รูป QR Code: รองรับการขยาย/ย่อแบบไดนามิก */
     .sticker-qrcode {
         display: flex;
         justify-content: center;
         align-items: center;
-        margin: 1mm 0;
+        margin: auto 0;
+        width: 100%;
+        flex-shrink: 0;
     }
     .sticker-qrcode canvas,
     .sticker-qrcode img {
         display: block;
         margin: 0 auto;
-        width: 105px !important;
-        height: 105px !important;
+        width: var(--qr-img-size) !important;
+        height: var(--qr-img-size) !important;
+        max-width: 100%;
+        object-fit: contain;
+        transition: width 0.2s ease, height 0.2s ease;
     }
 
-    /* ส่วนท้ายข้อมูลครุภัณฑ์ */
+    /* ส่วนท้ายข้อมูลครุภัณฑ์: ป้องกันข้อความล้นกรอบเมื่อปรับไซส์เล็ก */
     .sticker-footer {
         width: 100%;
         margin-top: 1mm;
+        overflow: hidden;
+        flex-shrink: 0;
     }
     .sticker-asset-number {
         font-family: 'Courier New', Courier, monospace;
         font-weight: bold;
-        font-size: 9.5pt;
+        font-size: var(--font-size-number);
         color: #000;
         line-height: 1.2;
-        word-break: break-all;
-    }
-    .sticker-asset-name {
-        font-size: 8pt;
-        color: #333;
-        line-height: 1.25;
-        margin-top: 1mm;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
+        width: 100%;
+        white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-height: 2.5em;
+        transition: font-size 0.2s ease;
+    }
+    .sticker-asset-name {
+        font-size: var(--font-size-main);
+        color: #333;
+        line-height: 1.2;
+        margin-top: 0.5mm;
+        width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: font-size 0.2s ease;
+    }
+
+    /* สไตล์ตกแต่ง Range Slider */
+    .form-range::-webkit-slider-thumb {
+        background: #0d6efd;
+        box-shadow: 0 2px 6px rgba(13, 110, 253, 0.4);
+    }
+    .form-range::-moz-range-thumb {
+        background: #0d6efd;
+        box-shadow: 0 2px 6px rgba(13, 110, 253, 0.4);
     }
 
     /* =====================================================================
-     * สไตล์สำหรับการพิมพ์จริง (@media print)
+     * 3. สไตล์สำหรับการพิมพ์จริง (@media print)
      * ===================================================================== */
     @media print {
         @page {
@@ -281,7 +328,7 @@ require_once __DIR__ . '/../component/admin_navbar.php';
             padding: 0 !important;
             color: black !important;
         }
-        /* ซ่อนเมนูนำทาง แถบเครื่องมือ ฟอร์มค้นหา ปุ่มทั้งหมด */
+        /* ซ่อนเมนูนำทาง แถบเครื่องมือ ฟอร์มค้นหา และคอนโทรลทั้งหมด */
         .no-print,
         nav,
         .navbar,
@@ -289,6 +336,9 @@ require_once __DIR__ . '/../component/admin_navbar.php';
         .btn,
         footer,
         .alert,
+        #sidebar,
+        #sidebarOffcanvas,
+        .sidebar-bottom-profile,
         .preview-wrapper > .preview-title {
             display: none !important;
         }
@@ -296,6 +346,7 @@ require_once __DIR__ . '/../component/admin_navbar.php';
             background: transparent !important;
             padding: 0 !important;
             margin: 0 !important;
+            overflow: visible !important;
         }
         .a4-sheet {
             width: 100% !important;
@@ -306,17 +357,33 @@ require_once __DIR__ . '/../component/admin_navbar.php';
         }
         .sticker-grid {
             display: grid !important;
-            grid-template-columns: repeat(3, 1fr) !important;
-            gap: 4mm !important;
+            grid-template-columns: repeat(auto-fill, minmax(var(--sticker-width), 1fr)) !important;
+            gap: var(--sticker-gap) !important;
             page-break-inside: auto;
         }
         .sticker-item {
             box-sizing: border-box !important;
-            height: 63mm !important;
-            page-break-inside: avoid !important; /* ป้องกันการถูกตัดหน้ากลางดวงสติกเกอร์ */
+            width: 100% !important;
+            height: var(--sticker-height) !important;
+            padding: var(--sticker-padding) !important;
+            page-break-inside: avoid !important;
             break-inside: avoid !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+        }
+        .sticker-qrcode canvas,
+        .sticker-qrcode img {
+            width: var(--qr-img-size) !important;
+            height: var(--qr-img-size) !important;
+        }
+        .sticker-header {
+            font-size: var(--font-size-header) !important;
+        }
+        .sticker-asset-number {
+            font-size: var(--font-size-number) !important;
+        }
+        .sticker-asset-name {
+            font-size: var(--font-size-main) !important;
         }
         .sticker-bordered {
             border: 0.5px dashed #999 !important;
@@ -456,17 +523,69 @@ require_once __DIR__ . '/../component/admin_navbar.php';
             </div>
         <?php else: ?>
 
+            <!-- แผงควบคุมการพิมพ์และปรับขนาดสติกเกอร์ (Print & Dynamic Size Control Toolbar) -->
+            <div class="card border-0 shadow-sm rounded-4 mb-3 no-print" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0 !important;">
+                <div class="card-body p-3 p-md-4">
+                    <div class="row g-3 align-items-center">
+                        
+                        <!-- ฝั่งซ้าย: หัวข้อการปรับขนาด และ Badge แสดงสถานะปัจจุบัน -->
+                        <div class="col-lg-4 col-md-12">
+                            <div class="d-flex align-items-center mb-1">
+                                <span class="badge rounded-circle p-2 bg-primary text-white me-2">
+                                    <i class="fa-solid fa-sliders"></i>
+                                </span>
+                                <h6 class="fw-bold text-dark mb-0">ปรับขนาดสติกเกอร์ QR Code</h6>
+                                <span class="badge ms-2" id="currentSizeBadge">Medium (กลาง)</span>
+                            </div>
+                            <div class="text-muted small ps-4 ms-2" id="currentSizeDetail">
+                                แสดงผล 4-5 ดวง/แถว &bull; QR ~75px &bull; ขนาดมาตรฐานสำหรับครุภัณฑ์ทั่วไป
+                            </div>
+                        </div>
+
+                        <!-- ฝั่งกลาง: ปุ่มเลือกขนาดลัด และแถบเลื่อน Range Slider -->
+                        <div class="col-lg-5 col-md-7 col-sm-12">
+                            <div class="d-flex flex-column gap-2">
+                                <!-- ปุ่มเลือกขนาดลัด (Preset Buttons: Small, Medium, Large) -->
+                                <div class="btn-group w-100 shadow-sm" role="group" aria-label="Preset Sizes">
+                                    <button type="button" class="btn btn-outline-primary btn-preset-size fw-bold py-2" data-scale="1" onclick="applyQrScale(1)">
+                                        <i class="fa-solid fa-compress me-1"></i> เล็ก (Small)
+                                    </button>
+                                    <button type="button" class="btn btn-primary btn-preset-size fw-bold py-2 active" data-scale="2" onclick="applyQrScale(2)">
+                                        <i class="fa-solid fa-expand me-1"></i> กลาง (Medium)
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary btn-preset-size fw-bold py-2" data-scale="3" onclick="applyQrScale(3)">
+                                        <i class="fa-solid fa-maximize me-1"></i> ใหญ่ (Large)
+                                    </button>
+                                </div>
+
+                                <!-- แถบเลื่อนปรับขนาด (Range Slider: <input type="range">) -->
+                                <div class="d-flex align-items-center gap-2 px-1 pt-1">
+                                    <span class="text-secondary small fw-bold text-nowrap"><i class="fa-solid fa-minimize me-1 text-info"></i>เล็ก</span>
+                                    <input type="range" class="form-range" id="qrScaleSlider" min="1" max="3" step="1" value="2" oninput="applyQrScale(this.value)" style="cursor: pointer;">
+                                    <span class="text-secondary small fw-bold text-nowrap">ใหญ่<i class="fa-solid fa-maximize ms-1 text-warning"></i></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ฝั่งขวาสุด: ปุ่มสั่งพิมพ์ทันที (Print Button) -->
+                        <div class="col-lg-3 col-md-5 col-sm-12 text-md-end text-center">
+                            <button onclick="window.print()" class="btn btn-success btn-lg w-100 rounded-pill px-4 py-2 fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2">
+                                <i class="fa-solid fa-print fs-5"></i>
+                                <span>สั่งพิมพ์ทันที (Print)</span>
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
             <!-- แถบสรุปผลลัพธ์ -->
             <div class="d-flex justify-content-between align-items-center mb-3 no-print">
-                <div class="text-secondary">
+                <div class="text-secondary small">
+                    <i class="fa-solid fa-circle-info text-primary me-1"></i>
                     พบครุภัณฑ์ทั้งหมด <strong><?php echo number_format($totalFound); ?></strong> รายการ 
-                    (กำลังแสดง <strong><?php echo number_format(count($items)); ?></strong> ดวง 
-                    &bull; คิดเป็นประมาณ <strong><?php echo ceil(count($items) / 12); ?></strong> หน้า A4)
-                </div>
-                <div>
-                    <button onclick="window.print()" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">
-                        <i class="fa-solid fa-print me-1"></i> พิมพ์หน้านี้ (Print Labels)
-                    </button>
+                    &bull; กำลังแสดงผล <strong><?php echo number_format(count($items)); ?></strong> ดวง 
+                    <span id="pageEstimateText"></span>
                 </div>
             </div>
 
@@ -480,7 +599,7 @@ require_once __DIR__ . '/../component/admin_navbar.php';
                             $scanUrl = $scanBaseUrl . urlencode($it['DA_Number']);
                             $borderClass = ($showBorder == 1) ? 'sticker-bordered' : 'sticker-borderless';
                             ?>
-                            <div class="sticker-item <?php echo $borderClass; ?>" id="sticker-item-<?php echo $idx; ?>">
+                            <div class="sticker-item <?php echo $borderClass; ?> d-flex flex-column align-items-center justify-content-between" id="sticker-item-<?php echo $idx; ?>">
                                 
                                 <!-- ส่วนบน: ชื่อระบบ / สังกัด และ หมวดหมู่ -->
                                 <div class="sticker-header">
@@ -497,8 +616,8 @@ require_once __DIR__ . '/../component/admin_navbar.php';
                                 </div>
 
                                 <!-- ส่วนล่าง: หมายเลขครุภัณฑ์ และ ชื่อรายการ -->
-                                <div class="sticker-footer">
-                                    <div class="sticker-asset-number">
+                                <div class="sticker-footer w-100 text-center">
+                                    <div class="sticker-asset-number" title="<?php echo htmlspecialchars($it['DA_Number']); ?>">
                                         <?php echo htmlspecialchars($it['DA_Number']); ?>
                                     </div>
                                     <div class="sticker-asset-name" title="<?php echo htmlspecialchars($it['DA_ListName']); ?>">
@@ -539,26 +658,163 @@ if (typeof QRCode === 'undefined') {
 </script>
 
 <script>
+/**
+ * =============================================================================
+ * [DYNAMIC QR SIZE ADJUSTMENT / การปรับขนาด QR Code แบบไดนามิก]
+ * =============================================================================
+ * จุดตั้งค่า Scale สำหรับปรับจูนขนาดสติกเกอร์ (Pixel, Millimeter, และ Font Size)
+ * สามารถเพิ่มหรือปรับเปลี่ยนตัวเลขด้านล่างนี้ได้โดยตรง เพื่อความสะดวกในการจูนสัดส่วน
+ */
+const QR_SIZE_CONFIG = {
+    // -------------------------------------------------------------------------
+    // 1. ขนาดเล็ก (Small): QR ~46px สำหรับติดอุปกรณ์ชิ้นเล็ก (แสดงผล 5-7 ดวง/แถว)
+    // -------------------------------------------------------------------------
+    1: {
+        label: 'Small (เล็ก)',
+        badgeClass: 'bg-info-subtle text-info border-info-subtle',
+        stickerWidth: '28mm',       // ความกว้างสติกเกอร์ (A4 กว้าง 194mm ได้ประมาณ 6 ดวง/แถว)
+        stickerHeight: '38mm',      // ความสูงสติกเกอร์ (ได้ประมาณ 7 แถว = 42 ดวง/แผ่น)
+        qrImgSize: '46px',          // ขนาดภาพ QR Code (พิกเซล)
+        fontSizeHeader: '5.5pt',    // ขนาดฟอนต์ส่วนหัว
+        fontSizeNumber: '6.5pt',    // ขนาดฟอนต์รหัสครุภัณฑ์
+        fontSizeMain: '6pt',        // ขนาดฟอนต์ชื่อครุภัณฑ์
+        stickerPadding: '2mm 1.5mm',// ระยะขอบด้านในสติกเกอร์
+        stickerGap: '2.5mm',        // ระยะห่างระหว่างดวงสติกเกอร์
+        desc: 'แสดงผล 5-7 ดวง/แถว &bull; QR ~46px &bull; เหมาะสำหรับติดอุปกรณ์ขนาดเล็ก',
+        itemsPerPage: 42            // จำนวนดวงประมาณการต่อ 1 หน้า A4
+    },
+    // -------------------------------------------------------------------------
+    // 2. ขนาดกลาง (Medium): QR ~75px สัดส่วนมาตรฐาน (แสดงผล 4-5 ดวง/แถว)
+    // -------------------------------------------------------------------------
+    2: {
+        label: 'Medium (กลาง)',
+        badgeClass: 'bg-primary-subtle text-primary border-primary-subtle',
+        stickerWidth: '44mm',       // ความกว้างสติกเกอร์ (ได้ประมาณ 4 ดวง/แถว)
+        stickerHeight: '52mm',      // ความสูงสติกเกอร์ (ได้ประมาณ 5 แถว = 20 ดวง/แผ่น)
+        qrImgSize: '75px',          // ขนาดภาพ QR Code (พิกเซล)
+        fontSizeHeader: '7pt',      // ขนาดฟอนต์ส่วนหัว
+        fontSizeNumber: '8pt',      // ขนาดฟอนต์รหัสครุภัณฑ์
+        fontSizeMain: '7.5pt',      // ขนาดฟอนต์ชื่อครุภัณฑ์
+        stickerPadding: '3mm 2.5mm',// ระยะขอบด้านในสติกเกอร์
+        stickerGap: '3mm',          // ระยะห่างระหว่างดวงสติกเกอร์
+        desc: 'แสดงผล 4-5 ดวง/แถว &bull; QR ~75px &bull; ขนาดมาตรฐานสำหรับครุภัณฑ์ทั่วไป',
+        itemsPerPage: 20            // จำนวนดวงประมาณการต่อ 1 หน้า A4
+    },
+    // -------------------------------------------------------------------------
+    // 3. ขนาดใหญ่ (Large): QR ~125px สำหรับแปะหน้าห้องหรือครุภัณฑ์ขนาดใหญ่ (2-3 ดวง/แถว)
+    // -------------------------------------------------------------------------
+    3: {
+        label: 'Large (ใหญ่)',
+        badgeClass: 'bg-warning-subtle text-dark border-warning-subtle',
+        stickerWidth: '62mm',       // ความกว้างสติกเกอร์ (ได้ประมาณ 3 ดวง/แถว)
+        stickerHeight: '76mm',      // ความสูงสติกเกอร์ (ได้ประมาณ 3-4 แถว = 9-12 ดวง/แผ่น)
+        qrImgSize: '125px',         // ขนาดภาพ QR Code (พิกเซล)
+        fontSizeHeader: '8.5pt',    // ขนาดฟอนต์ส่วนหัว
+        fontSizeNumber: '10.5pt',   // ขนาดฟอนต์รหัสครุภัณฑ์
+        fontSizeMain: '9pt',        // ขนาดฟอนต์ชื่อครุภัณฑ์
+        stickerPadding: '4mm 3mm',  // ระยะขอบด้านในสติกเกอร์
+        stickerGap: '4mm',          // ระยะห่างระหว่างดวงสติกเกอร์
+        desc: 'แสดงผล 2-3 ดวง/แถว &bull; QR ~125px &bull; ฟอนต์ใหญ่ชัดเจน สำหรับแปะหน้าห้อง/กล่องใหญ่',
+        itemsPerPage: 12            // จำนวนดวงประมาณการต่อ 1 หน้า A4
+    }
+};
+
+/**
+ * ฟังก์ชันปรับขนาด CSS Variables และอัปเดต UI แบบ Real-time
+ * @param {number|string} scaleLevel ระดับขนาด (1: Small, 2: Medium, 3: Large)
+ */
+function applyQrScale(scaleLevel) {
+    scaleLevel = parseInt(scaleLevel) || 2;
+    if (scaleLevel < 1) scaleLevel = 1;
+    if (scaleLevel > 3) scaleLevel = 3;
+
+    var config = QR_SIZE_CONFIG[scaleLevel];
+    if (!config) return;
+
+    // 1. อัปเดต CSS Variables ไปยังระดับ :root (document.documentElement)
+    // รองรับทั้งบนหน้าจอ และเวลาสั่งพิมพ์ (@media print) นำค่าไปใช้อัตโนมัติ
+    var root = document.documentElement;
+    root.style.setProperty('--sticker-width', config.stickerWidth);
+    root.style.setProperty('--sticker-height', config.stickerHeight);
+    root.style.setProperty('--qr-img-size', config.qrImgSize);
+    root.style.setProperty('--font-size-header', config.fontSizeHeader);
+    root.style.setProperty('--font-size-number', config.fontSizeNumber);
+    root.style.setProperty('--font-size-main', config.fontSizeMain);
+    root.style.setProperty('--sticker-padding', config.stickerPadding);
+    root.style.setProperty('--sticker-gap', config.stickerGap);
+
+    // 2. ซิงก์ค่าให้กับ Slider
+    var slider = document.getElementById('qrScaleSlider');
+    if (slider && slider.value != scaleLevel) {
+        slider.value = scaleLevel;
+    }
+
+    // 3. อัปเดตสถานะ Active ของปุ่ม Preset ทั้ง 3
+    var presetButtons = document.querySelectorAll('.btn-preset-size');
+    presetButtons.forEach(function(btn) {
+        var btnScale = parseInt(btn.getAttribute('data-scale'));
+        if (btnScale === scaleLevel) {
+            btn.classList.add('active', 'btn-primary');
+            btn.classList.remove('btn-outline-primary');
+        } else {
+            btn.classList.remove('active', 'btn-primary');
+            btn.classList.add('btn-outline-primary');
+        }
+    });
+
+    // 4. อัปเดตข้อความ Badge และคำอธิบาย
+    var badge = document.getElementById('currentSizeBadge');
+    var desc = document.getElementById('currentSizeDetail');
+    if (badge) {
+        badge.textContent = config.label;
+        badge.className = 'badge border px-2.5 py-1 ' + config.badgeClass;
+    }
+    if (desc) {
+        desc.innerHTML = config.desc;
+    }
+
+    // 5. คำนวณจำนวนหน้า A4 โดยประมาณแบบไดนามิก
+    var pageText = document.getElementById('pageEstimateText');
+    var totalItems = <?php echo !empty($items) ? (int)count($items) : 0; ?>;
+    if (pageText && totalItems > 0) {
+        var estPages = Math.ceil(totalItems / config.itemsPerPage);
+        pageText.innerHTML = '&bull; คิดเป็นประมาณ <strong>' + estPages + '</strong> หน้า A4';
+    }
+
+    // 6. บันทึกค่าลงใน localStorage เพื่อจดจำขนาดสติกเกอร์ที่ผู้ใช้เลือกไว้
+    try {
+        localStorage.setItem('daam_qr_print_scale', scaleLevel);
+    } catch(e) {}
+}
+
 // สคริปต์สำหรับการ Generate QR Code ลงในแต่ละดวงสติกเกอร์
 document.addEventListener("DOMContentLoaded", function() {
     var qrElements = document.querySelectorAll('.sticker-qrcode');
     
+    // สร้างภาพ QR Code คุณภาพสูง (250x250) เพื่อให้เมื่อขยาย/ย่อด้วย CSS จะคมชัดเสมอ ไม่แตก
     qrElements.forEach(function(el, index) {
         var scanUrl = el.getAttribute('data-url');
         if (scanUrl && typeof QRCode !== 'undefined') {
-            // ทำการล้างเนื้อหาเดิมก่อนสร้างใหม่
             el.innerHTML = '';
             
             new QRCode(el, {
                 text: scanUrl,
-                width: 105,
-                height: 105,
+                width: 250,
+                height: 250,
                 colorDark: "#000000",
                 colorLight: "#ffffff",
                 correctLevel: QRCode.CorrectLevel.M
             });
         }
     });
+
+    // คืนค่า Scale ที่เคยบันทึกไว้ใน localStorage (ค่าเริ่มต้นคือ 2: Medium)
+    var savedScale = 2;
+    try {
+        savedScale = parseInt(localStorage.getItem('daam_qr_print_scale')) || 2;
+    } catch(e) {}
+    
+    applyQrScale(savedScale);
 });
 </script>
 

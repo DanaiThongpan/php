@@ -19,8 +19,12 @@
 <!-- ========================================================================= -->
 <!-- CORE JAVASCRIPT LIBRARIES -->
 <!-- ========================================================================= -->
-<!-- jQuery 3.6 -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- jQuery 3.6 (ตรวจสอบหากยังไม่ได้โหลด) -->
+<script>
+if (typeof jQuery === 'undefined') {
+    document.write('<script src="https://code.jquery.com/jquery-3.6.0.min.js"><\/script>');
+}
+</script>
 
 <!-- Bootstrap 5.3 Bundle JS (รวม Popper) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

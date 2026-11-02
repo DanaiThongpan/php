@@ -7,8 +7,9 @@ if (!isset($_SESSION['Selogin']) || $_SESSION['Selogin'] != 1 || $_SESSION['user
     exit();
 }
 
-// 2. โหลดไฟล์เชื่อมต่อฐานข้อมูล PDO
-require_once '../control/connectPDO_dev.php';
+// 2. โหลดไฟล์เชื่อมต่อฐานข้อมูล PDO และ BorrowService
+require_once __DIR__ . '/../control/connectPDO_dev.php';
+require_once __DIR__ . '/../includes/BorrowService.php';
 
 $useraccountName = $_SESSION['Sename'] ?? 'ไม่ทราบชื่อ';
 $currentUserID   = $_SESSION['SeUser'] ?? '';
@@ -51,44 +52,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $alertMsg = "ไม่พบรหัสครุภัณฑ์ที่ต้องการดำเนินการ";
         $alertType = "danger";
     } else {
-        try {
-            // ตรวจสอบสิทธิ์ว่ามีสิทธิ์จัดการรายการนี้หรือไม่
-            if ($isSuperAdmin) {
-                $stmtCheck = $pdo->prepare("SELECT * FROM durable_articles WHERE DA_ID = :id AND is_approved = 0");
-                $stmtCheck->execute([':id' => $da_id]);
-            } else {
-                $stmtCheck = $pdo->prepare("SELECT * FROM durable_articles WHERE DA_ID = :id AND is_approved = 0 AND (owner_department = :my_dept OR (owner_department IS NULL AND created_by = :my_uid))");
-                $stmtCheck->execute([
-                    ':id'      => $da_id,
-                    ':my_dept' => $currentUserDept,
-                    ':my_uid'  => $currentUserID
-                ]);
-            }
-            $targetItem = $stmtCheck->fetch(PDO::FETCH_ASSOC);
-
-            if (!$targetItem) {
-                $alertMsg = "ไม่พบรายการครุภัณฑ์นี้ หรือคุณไม่มีสิทธิ์จัดการคำขอของแผนกอื่น";
-                $alertType = "warning";
-            } else {
-                if ($action === 'approve') {
-                    // อนุมัติ: ตั้ง is_approved = 1 และ statusID = 's0001' (พร้อมใช้งาน)
-                    $stmtApprove = $pdo->prepare("UPDATE durable_articles SET is_approved = 1, statusID = 's0001' WHERE DA_ID = :id");
-                    $stmtApprove->execute([':id' => $da_id]);
-
-                    $alertMsg = "✅ อนุมัติครุภัณฑ์ [{$targetItem['DA_Number']} - {$targetItem['DA_ListName']}] เรียบร้อยแล้ว! รายการพร้อมใช้งานในระบบ";
-                    $alertType = "success";
-                } elseif ($action === 'reject') {
-                    // ปฏิเสธคำขอ: ลบรายการคำขอนั้นออกจากระบบ
-                    $stmtReject = $pdo->prepare("DELETE FROM durable_articles WHERE DA_ID = :id");
-                    $stmtReject->execute([':id' => $da_id]);
-
-                    $alertMsg = "🗑️ ปฏิเสธและลบคำขอครุภัณฑ์ [{$targetItem['DA_Number']}] เรียบร้อยแล้ว";
-                    $alertType = "info";
-                }
-            }
-        } catch (PDOException $e) {
-            $alertMsg = "เกิดข้อผิดพลาดในการประมวลผล: " . $e->getMessage();
-            $alertType = "danger";
+        if ($action === 'approve') {
+            $result = BorrowService::approveAsset($pdo, $da_id, $currentUserID, $currentUserDept, $isSuperAdmin);
+            $alertMsg = $result['success'] ? "✅ " . $result['message'] : $result['message'];
+            $alertType = $result['success'] ? "success" : "warning";
+        } elseif ($action === 'reject') {
+            $result = BorrowService::rejectAsset($pdo, $da_id, $currentUserID, $currentUserDept, $isSuperAdmin);
+            $alertMsg = $result['success'] ? "🗑️ " . $result['message'] : $result['message'];
+            $alertType = $result['success'] ? "info" : "warning";
         }
     }
 }

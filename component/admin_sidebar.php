@@ -49,23 +49,20 @@ function renderSidebarNavItems($currentScript, $pendingCount, $overdueCount, $is
         ['url' => 'manage_users.php', 'icon' => 'fa-users-gear', 'label' => 'จัดการข้อมูลผู้ใช้', 'badge' => ''],
         ['url' => 'print_qrcode.php', 'icon' => 'fa-qrcode', 'label' => 'พิมพ์ QR Code (A4)', 'badge' => ''],
         ['url' => 'approve_items.php', 'icon' => 'fa-clipboard-check', 'label' => 'อนุมัติคำขอขึ้นทะเบียน', 'badge' => ($pendingCount > 0) ? '<span class="badge bg-danger rounded-pill">' . $pendingCount . '</span>' : ''],
-        ['url' => 'admin_history.php', 'icon' => 'fa-clock-rotate-left', 'label' => 'แจ้งเตือนคืนครุภัณฑ์', 'badge' => ($overdueCount > 0) ? '<span class="badge bg-danger rounded-pill">' . $overdueCount . '</span>' : ''],
+        ['url' => 'admin_history.php', 'icon' => 'fa-clock-rotate-left', 'label' => 'ประวัติการยืม-คืน', 'badge' => ($overdueCount > 0) ? '<span class="badge bg-danger rounded-pill">' . $overdueCount . '</span>' : ''],
         ['url' => 'import_csv.php', 'icon' => 'fa-file-csv', 'label' => 'นำเข้าข้อมูล (CSV)', 'badge' => ''],
-        ['url' => 'page_Repair_AddEdit.php', 'icon' => 'fa-wrench', 'label' => 'บันทึกซ่อมบำรุง', 'badge' => ''],
+        ['url' => 'manage_repairs.php', 'icon' => 'fa-wrench', 'label' => 'บันทึกการซ่อม', 'badge' => ''],
         ['url' => 'report_details.php', 'icon' => 'fa-chart-pie', 'label' => 'รายงานและสถิติ', 'badge' => ''],
+        ['url' => 'settings_mail.php', 'icon' => 'fa-envelope-circle-check', 'label' => 'ตั้งค่าอีเมลแจ้งเตือน', 'badge' => ''],
     ];
-
-    if ($isSuperAdmin) {
-        $navs[] = ['url' => 'settings_mail.php', 'icon' => 'fa-envelope-gear', 'label' => 'ตั้งค่าอีเมลแจ้งเตือน', 'badge' => ''];
-    }
 
     echo '<ul class="sidebar-nav">';
     echo '<li class="nav-header">เมนูหลัก</li>';
     foreach ($navs as $n) {
-        $isActive = ($currentScript === $n['url']) ? 'active' : '';
+        $isActive = ($currentScript === $n['url'] || ($n['url'] === 'manage_repairs.php' && $currentScript === 'page_Repair_AddEdit.php')) ? 'active' : '';
         echo '<li>';
         echo '<a href="' . $n['url'] . '" class="nav-link ' . $isActive . '">';
-        echo '  <span class="nav-left"><i class="fa-solid ' . $n['icon'] . '"></i> ' . htmlspecialchars($n['label']) . '</span>';
+        echo '  <span class="nav-left"><i class="fa-solid ' . $n['icon'] . ' fa-fw"></i> ' . htmlspecialchars($n['label']) . '</span>';
         if (!empty($n['badge'])) {
             echo '  <span>' . $n['badge'] . '</span>';
         }

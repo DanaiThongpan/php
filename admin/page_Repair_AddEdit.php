@@ -108,9 +108,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action'])) {
     }
 }
 
-// ตรวจสอบว่ามีรหัสครุภัณฑ์หรือไม่
+// ตรวจสอบว่ามีรหัสครุภัณฑ์หรือไม่ (หากไม่ระบุ ให้ไปที่หน้ารวมบันทึกการซ่อม)
 if (empty($da_id)) {
-    header("Location: manage_data.php");
+    header("Location: manage_repairs.php");
     exit();
 }
 
@@ -393,7 +393,7 @@ require_once __DIR__ . '/../component/admin_navbar.php';
         $('#repairsTable').DataTable({
             "language": { "url": "//cdn.datatables.net/plug-ins/1.13.4/i18n/th.json" },
             "pageLength": 10,
-            "order": [[ 0, "asc" ]]
+            "order": [] // เรียงลำดับจากใหม่ไปเก่าตาม SQL (repair_Date DESC)
         });
         <?php endif; ?>
 

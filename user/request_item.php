@@ -108,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // 4. ดึงข้อมูลตัวเลือกสำหรับ Dropdown และประวัติคำขอของผู้ใช้งาน
 try {
     $classList = $pdo->query("SELECT classificationID, classificationName FROM classification ORDER BY classificationName ASC")->fetchAll(PDO::FETCH_ASSOC);
-    $buildingList = $pdo->query("SELECT buildingID, buildingName FROM building ORDER BY buildingName ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $buildingList = $pdo->query("SELECT buildingID, buildingName FROM building WHERE (is_active = 1 OR is_active IS NULL) ORDER BY buildingName ASC")->fetchAll(PDO::FETCH_ASSOC);
     $classroomList = $pdo->query("SELECT classroomID, classroomName, buildingID FROM building_classroom ORDER BY classroomName ASC")->fetchAll(PDO::FETCH_ASSOC);
 
     // ดึงประวัติคำขอทั้งหมดที่ผู้ใช้คนนี้เป็นผู้สร้าง (created_by = :uid)
